@@ -3,33 +3,27 @@
 #include <math.h>
 #include "util/Types.h"
 
-// Redondea la altitud para freefall a múltiplos de 5
-//  - Para positivos: hacia abajo (floor).
-//  - Para negativos: hacia arriba (ceil) para mantener sentido del signo.
-inline float quantizeAltitudeFreefall(float alt)
-{
-    if (alt >= 0.0f) {
-        return floorf(alt / 5.0f) * 5.0f;
-    } else {
-        return ceilf(alt / 5.0f) * 5.0f;
-    }
-}
-
 // Aplica las reglas de visualización descritas:
 // - Entrada: altToShow en la unidad actual (m o ft).
-// - isFreefall: si true, aplica cuantización a múltiplos de 5.
+// - isFreefall: si true, aplica cuantización en el tramo con 2 decimales.
 inline String formatAltitudeString(float altToShow, bool isFreefall)
 {
     float v = altToShow;
 
-    // 1) Cuantización especial en freefall
+    // 1) Cuantización especial en freefall: en el rango que se muestra con
+    //    2 decimales (≈1k-10k), limitar a saltos de 50 unidades (0.05k) para
+    //    evitar números muy cambiantes durante la caída.
     if (isFreefall) {
-        v = quantizeAltitudeFreefall(v);
+        float absV = fabsf(v);
+        if (absV >= 999.0f && absV < 9999.0f) {
+            constexpr float STEP = 50.0f;
+            v = (v >= 0.0f)
+                    ? floorf(v / STEP) * STEP
+                    : ceilf(v / STEP)  * STEP;
+        }
     }
 
-    // 2) Trabajamos con valor absoluto para decidir formato,
-    //    pero conservamos el signo aparte.
-    float sign = (v < 0.0f) ? -1.0f : 1.0f;
+    // 2) Trabajamos con valor absoluto para decidir formato.
     float absV = fabsf(v);
 
     String out;
