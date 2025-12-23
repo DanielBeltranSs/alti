@@ -12,9 +12,10 @@ enum class UnitType : uint8_t {
 
 // Modos de operación del sensor de presión / rendimiento
 enum class SensorMode : uint8_t {
-    AHORRO,   // suelo / bajo consumo
-    PRECISO,  // subida y campana
-    FREEFALL  // alta frecuencia en caída libre
+    AHORRO,          // suelo / bajo consumo continuo
+    AHORRO_FORCED,   // suelo / toma puntual en modo forced
+    PRECISO,         // subida y campana
+    FREEFALL         // alta frecuencia en caída libre
 };
 
 

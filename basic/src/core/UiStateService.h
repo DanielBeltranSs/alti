@@ -14,6 +14,7 @@ public:
         lockGroundStableStartMs = 0;
         menuIndex               = 0;
         offsetEditValue         = 0.0f;
+        suspendRequested        = false;
     }
 
     // Notify that the user interacted (e.g., pressed a button).
@@ -157,6 +158,17 @@ public:
         }
     }
 
+    // ----- Suspensión manual (deep sleep) -----
+    void requestSuspend() { suspendRequested = true; }
+
+    bool hasSuspendRequest() const { return suspendRequested; }
+
+    bool consumeSuspendRequest() {
+        bool req = suspendRequested;
+        suspendRequested = false;
+        return req;
+    }
+
 private:
     static float clampOffset(float v) {
         constexpr float MIN_OFF = -9999.0f;
@@ -199,4 +211,6 @@ private:
     float     offsetEditValue   = 0.0f;
 
     DateTimeEditState dtEdit{};
+
+    bool suspendRequested = false;
 };

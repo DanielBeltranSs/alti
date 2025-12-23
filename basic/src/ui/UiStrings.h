@@ -14,6 +14,7 @@ static const char* const UI_MENU_LABELS_ES[UI_MENU_ITEM_COUNT] = {
     "Offset",
     "Fecha/hora",
     "Idioma",
+    "Suspender",
     "Salir"
 };
 
@@ -26,6 +27,7 @@ static const char* const UI_MENU_LABELS_EN[UI_MENU_ITEM_COUNT] = {
     "Offset",
     "Date/Time",
     "Language",
+    "Suspend",
     "Exit"
 };
 

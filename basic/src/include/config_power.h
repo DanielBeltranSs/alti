@@ -10,7 +10,7 @@
 
 // Time in milliseconds before the device may enter light sleep when
 // idle and in ground state (no menu interaction).
-constexpr uint32_t POWER_IDLE_LIGHT_SLEEP_TIMEOUT_MS = 1000; // 30 seconds
+constexpr uint32_t POWER_IDLE_LIGHT_SLEEP_TIMEOUT_MS = 60000; // 60 seconds (valor previo)
 
 // Time in milliseconds of inactivity before entering deep sleep.  Deep
 // sleep will only be entered from the GROUND phase when the device

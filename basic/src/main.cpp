@@ -181,7 +181,8 @@ void loop() {
         bool inAhorroMain =
             (phase  == FlightPhase::GROUND) &&
             !model.lockActive &&
-            (dec.sensorMode == SensorMode::AHORRO);
+            (dec.sensorMode == SensorMode::AHORRO ||
+             dec.sensorMode == SensorMode::AHORRO_FORCED);
 
         gUiRenderer.renderMainIfNeeded(model, inAhorroMain, screen, now);
     } else if (screen == UiScreen::MENU_ROOT) {

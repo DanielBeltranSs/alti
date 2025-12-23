@@ -20,4 +20,4 @@ constexpr uint8_t UI_BRIGHTNESS_HIGH = 2;
 constexpr const uint8_t* UI_FONT_ALT_MAIN   = u8g2_font_logisoso32_tn;
 constexpr const uint8_t* UI_FONT_TEXT_SMALL = u8g2_font_6x10_tf;
 
-constexpr uint8_t UI_MENU_ITEM_COUNT = 9;
+constexpr uint8_t UI_MENU_ITEM_COUNT = 10;

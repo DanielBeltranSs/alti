@@ -132,6 +132,13 @@ private:
             return;
         }
 
+        // Si nunca vimos freefall, interpretamos que fue un falso positivo / ride-down.
+        if (ffStartMs == 0) {
+            Serial.println("[REC] salto descartado: sin FREEFALL");
+            reset();
+            return;
+        }
+
         // Si no hubo deploy marcado, usar alt actual
         if (!deployMarked) {
             deployAltM = toMeters(alt.rawAlt, unit);

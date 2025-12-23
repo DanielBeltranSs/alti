@@ -13,7 +13,7 @@ struct SleepDecision {
     bool enterDeepSleep      = false;
     uint32_t lightSleepMaxMs = 1000;
     uint32_t cpuFreqMHz      = 40;
-    SensorMode sensorMode    = SensorMode::AHORRO;
+    SensorMode sensorMode    = SensorMode::AHORRO_FORCED;
     bool     showZzzHint         = false;
 };
 
@@ -25,7 +25,7 @@ public:
     void begin() {}
 
     SleepDecision evaluate(uint32_t nowMs,
-                           const UiStateService& ui,
+                           UiStateService& ui,
                            const FlightPhaseService& flight,
                            const Settings& settings,
                            BatteryMonitor& battery)
@@ -34,7 +34,7 @@ public:
 
         // Valores por defecto
         d.cpuFreqMHz      = CPU_FREQ_LOW;
-        d.sensorMode      = SensorMode::AHORRO;
+        d.sensorMode      = SensorMode::AHORRO_FORCED;
         d.enterLightSleep = false;
         d.enterDeepSleep  = false;
         d.lightSleepMaxMs = 0;
@@ -45,16 +45,46 @@ public:
         bool       locked   = ui.isLocked();
         uint32_t   lastInt  = ui.getLastInteractionMs();
         uint32_t   inactivityMs = (nowMs >= lastInt) ? (nowMs - lastInt) : 0;
+        bool       suspendReq = ui.hasSuspendRequest();
 
         float battVoltage = battery.getBatteryVoltage();
         bool  charger     = battery.isChargerConnected();
 
         // Constantes de política (tuneables)
-        const uint32_t NO_SLEEP_GRACE_MS     = 5000;               // ms tras interacción
-        const uint32_t LIGHT_SLEEP_GROUND_MS = 30000;              // light sleep "grande" en suelo
-        const uint32_t LIGHT_SLEEP_FLIGHT_MS = 20;                 // light sleep corto en vuelo
+        const uint32_t NO_SLEEP_GRACE_MS     = 5000;                // ms tras interacción
+        const uint32_t LIGHT_SLEEP_GROUND_MS = 60000;               // light sleep \"grande\" en suelo
+        const uint32_t LIGHT_SLEEP_FLIGHT_MS = 20;                  // light sleep corto en vuelo
         const uint32_t ZZZ_HINT_BEFORE_MS    = 5UL * 60UL * 1000UL; // 5 minutos
         const float    LOW_BATT_VOLTAGE      = 3.36f;
+        const uint32_t WAKE_GAP_THRESHOLD_MS = 30000;               // gap grande -> asumimos wake de LS larga
+        const uint32_t WAKE_GRACE_MS         = 0;                   // sin ventana fija: probes breves
+        const uint32_t WAKE_PROBE_SLEEP_MS   = 80;                  // light sleep breve para obtener VS (>30 ms)
+        const uint8_t  WAKE_PROBE_COUNT      = 2;                   // nº de ciclos breves tras wake largo
+
+        // Detectar que venimos de un sleep largo (gap grande entre evaluate).
+        if (lastEvaluateMs != 0) {
+            uint32_t gap = nowMs - lastEvaluateMs;
+            if (gap >= WAKE_GAP_THRESHOLD_MS) {
+                wakeGraceUntilMs = (WAKE_GRACE_MS > 0) ? (nowMs + WAKE_GRACE_MS) : 0;
+                wakeProbeRemaining = WAKE_PROBE_COUNT; // haremos 2 ciclos cortos para medir VS
+            }
+        }
+        lastEvaluateMs = nowMs;
+
+        // Suspender manual: sólo en suelo y sin lock para evitar apagar en vuelo.
+        if (suspendReq &&
+            !locked &&
+            phase == FlightPhase::GROUND)
+        {
+            (void)ui.consumeSuspendRequest();
+            d.enterDeepSleep  = true;
+            d.enterLightSleep = false;
+            d.lightSleepMaxMs = 0;
+            d.cpuFreqMHz      = CPU_FREQ_LOW;
+            d.sensorMode      = SensorMode::AHORRO_FORCED;
+            d.showZzzHint     = false;
+            return d;
+        }
 
         // 1) Si estamos en menú: CPU media, sin sleeps
         if (screen != UiScreen::MAIN) {
@@ -67,7 +97,7 @@ public:
         switch (phase) {
         case FlightPhase::GROUND:
             d.cpuFreqMHz = CPU_FREQ_LOW;         // 40 MHz
-            d.sensorMode = SensorMode::AHORRO;
+            d.sensorMode = SensorMode::AHORRO_FORCED; // forced para bajar consumo del BMP
             break;
         case FlightPhase::CLIMB:
         case FlightPhase::CANOPY:
@@ -80,12 +110,37 @@ public:
             break;
         }
 
+        // Si detectamos vuelo o lock, cancelamos probes pendientes.
+        if (phase != FlightPhase::GROUND || locked) {
+            wakeProbeRemaining = 0;
+        }
+
+        // Ciclos de "sospecha" tras un wake largo: dos sleeps breves para obtener VS.
+        if (!locked &&
+            screen == UiScreen::MAIN &&
+            phase == FlightPhase::GROUND &&
+            wakeProbeRemaining > 0)
+        {
+            wakeProbeRemaining--;
+            d.cpuFreqMHz      = CPU_FREQ_LOW;
+            d.sensorMode      = SensorMode::AHORRO_FORCED;
+            d.enterLightSleep = true;
+            d.lightSleepMaxMs = WAKE_PROBE_SLEEP_MS;
+            d.enterDeepSleep  = false;
+            d.showZzzHint     = false;
+            return d;
+        }
+
         // 3) Lock "rompe modo ahorro": consideramos estado "tipo vuelo"
         //    para la política de sleep, aunque phase == GROUND.
         bool isFlightLike = (phase != FlightPhase::GROUND) || locked;
 
-        // 4) Tiempo de gracia tras cualquier interacción: no dormimos todavía
-        if (inactivityMs < NO_SLEEP_GRACE_MS) {
+        // 4) Tiempo de gracia tras interacción o justo tras despertar de LS largo
+        bool graceActive =
+            (inactivityMs < NO_SLEEP_GRACE_MS) ||
+            (wakeGraceUntilMs != 0 && nowMs < wakeGraceUntilMs);
+
+        if (graceActive) {
             return d; // sólo devolvemos CPU + sensorMode
         }
 
@@ -152,4 +207,8 @@ private:
         default: return BASE;
         }
     }
+
+    uint32_t lastEvaluateMs   = 0;
+    uint32_t wakeGraceUntilMs = 0;
+    uint8_t  wakeProbeRemaining = 0;
 };

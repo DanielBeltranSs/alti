@@ -9,17 +9,20 @@
 //---------------------------------------------
 // Parámetros de altimetría (backend)
 //---------------------------------------------
-constexpr float ALT_DEADBAND_METERS      = 0.0f;    // zona muerta (en metros) antes de llevar a 0 visual
+constexpr float ALT_DEADBAND_METERS      =8.0f;    // zona muerta (en metros) antes de llevar a 0 visual
 constexpr float GROUND_ALT_THRESH_METERS = 1.0f;    // |altura_rel_suelo| < 1 m -> cerca del suelo
 constexpr float GROUND_VS_THRESH_MPS     = 0.3f;    // |velocidad vertical| < 0.3 m/s -> casi quieto
 constexpr uint32_t GROUND_STABLE_TIME_MS = 2'000;   // ms continuos para considerar suelo "estable"
 constexpr float ALT_FILTER_ALPHA         = 0.2f;    // filtro exponencial para suavizar altura/VS
 constexpr float MIN_VS_DT_SECONDS        = 0.03f;   // ignora dt demasiado pequeños (ruido)
 
-// Aproximación alrededor del nivel del mar:
-// dP/dz ≈ -12 Pa/m  →  1 Pa ≈ 0.0833 m
-constexpr float PA_TO_METERS = (1.0f / 12.0f);
-constexpr float M_TO_FT      = 3.2808399f;
+// Ecuación barométrica (ISA) para convertir presión relativa en altitud.
+// h = BARO_COEFF * (1 - (P / Pref) ^ BARO_EXP)
+// Pref = P / (1 - h / BARO_COEFF) ^ BARO_INV_EXP
+constexpr float BARO_COEFF    = 44330.0f;       // metros a nivel del mar ISA
+constexpr float BARO_EXP      = 0.190294957f;   // 1 / 5.2558797
+constexpr float BARO_INV_EXP  = 5.2558797f;
+constexpr float M_TO_FT       = 3.2808399f;
 
 // Auto ground-zero (drift lento en suelo)
 constexpr float   GZ_DRIFT_STEP_M          = 0.5f;      // ajuste máximo por iteración (m)
@@ -83,9 +86,9 @@ public:
             }
         }
 
-        // 3) Altura relativa en metros respecto a refPressurePa.
-        float deltaP = refPressurePa - pressurePa;  // presión baja => deltaP>0 => subimos
-        currentAltMeters = deltaP * PA_TO_METERS;
+        // 3) Altura relativa en metros respecto a refPressurePa (ecuación barométrica ISA).
+        float pressureRatio = pressurePa / refPressurePa;
+        currentAltMeters = BARO_COEFF * (1.0f - powf(pressureRatio, BARO_EXP));
 
         // 4) Suavizado de altura y cálculo de velocidad vertical (m/s).
         if (!isfinite(filteredAltMeters)) {
@@ -139,10 +142,9 @@ public:
         }
 
         // 8) **Recalibración automática una sola vez** cuando hay suelo estable.
-        //    Queremos que la UI muestre 0 => alt_rel_m = 0 => alt_m = offset_m
-        //    alt_m = (refP - P) * PA_TO_METERS  →  refP = P + offset_m / PA_TO_METERS
+        //    Queremos que la UI muestre 0 => alt_rel_m = 0 => alt_m = offset_m.
         if (!didInitialGroundZero && isGroundStableFlag) {
-            refPressurePa        = pressurePa + (offsetMeters / PA_TO_METERS);
+            refPressurePa        = computeRefPressure(pressurePa, offsetMeters);
             currentAltMeters     = offsetMeters;      // así relToGroundMeters pasa a 0 exacto
             filteredAltMeters    = offsetMeters;
             lastAltMeters        = currentAltMeters;  // evita pico de VS
@@ -169,7 +171,8 @@ public:
 
                 float newAccum = driftAccumMeters + step;
                 if (fabsf(newAccum) <= GZ_DRIFT_MAX_ABS_M) {
-                    refPressurePa   = pressurePa + ((offsetMeters - step) / PA_TO_METERS);
+                    float targetAlt = offsetMeters - step;
+                    refPressurePa   = computeRefPressure(pressurePa, targetAlt);
                     // Ajustamos alturas internas para evitar saltos al usuario
                     currentAltMeters  -= step;
                     filteredAltMeters -= step;
@@ -229,7 +232,7 @@ public:
         }
 
         float targetAltMeters = desiredAltMeters + offsetMeters;
-        refPressurePa         = pressurePa + (targetAltMeters / PA_TO_METERS);
+        refPressurePa         = computeRefPressure(pressurePa, targetAltMeters);
 
         // Ajustes auxiliares para evitar saltos
         currentAltMeters = targetAltMeters;
@@ -249,6 +252,17 @@ private:
     const Settings* settings  = nullptr;
 
     AltitudeData altData{};
+
+    // Conversión inversa de la ecuación barométrica: devuelve la presión de referencia
+    // necesaria para que la altitud calculada sea targetAltMeters cuando medimos pressurePa.
+    float computeRefPressure(float pressurePa, float targetAltMeters) const {
+        // Evita valores no físicos (h >= BARO_COEFF haría ratio <= 0)
+        float ratio = 1.0f - (targetAltMeters / BARO_COEFF);
+        if (ratio <= 0.0f) {
+            ratio = 0.01f; // clamp suave para no producir infinitos
+        }
+        return pressurePa / powf(ratio, BARO_INV_EXP);
+    }
 
     float    refPressurePa        = NAN;
     float    currentAltMeters     = 0.0f;

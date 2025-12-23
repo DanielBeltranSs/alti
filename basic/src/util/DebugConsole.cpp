@@ -51,9 +51,10 @@ Serial.print(dec.cpuFreqMHz);
 Serial.print(F(" MHz, SM: "));
 
 switch (dec.sensorMode) {
-case SensorMode::AHORRO:  Serial.print(F("AHORRO"));  break;
-case SensorMode::PRECISO: Serial.print(F("PRECISO")); break;
-case SensorMode::FREEFALL:Serial.print(F("FREEFALL"));break;
+case SensorMode::AHORRO:        Serial.print(F("AHORRO"));        break;
+case SensorMode::AHORRO_FORCED: Serial.print(F("AHO_FORCED"));    break;
+case SensorMode::PRECISO:       Serial.print(F("PRECISO"));       break;
+case SensorMode::FREEFALL:      Serial.print(F("FREEFALL"));      break;
 }
 
 Serial.print(F(", Ls:"));

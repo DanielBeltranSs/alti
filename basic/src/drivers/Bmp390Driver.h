@@ -120,7 +120,7 @@ public:
             return;
         }
 
-
+        forcedMode = (mode == SensorMode::AHORRO_FORCED);
 
         // Base: siempre presión + temperatura + DRDY
         settings.int_settings.drdy_en = BMP3_ENABLE;
@@ -129,12 +129,13 @@ public:
 
         switch (mode) {
         case SensorMode::AHORRO:
+        case SensorMode::AHORRO_FORCED:
             // Alta precisión pero poca frecuencia, filtro fuerte
             settings.odr_filter.press_os   = BMP3_OVERSAMPLING_8X;
             settings.odr_filter.temp_os    = BMP3_OVERSAMPLING_2X;
             settings.odr_filter.iir_filter = BMP3_IIR_FILTER_COEFF_15;
-            settings.odr_filter.odr        = BMP3_ODR_25_HZ;
-            Wire.setClock(100000); // 100 kHz
+            settings.odr_filter.odr        = forcedMode ? BMP3_ODR_3_1_HZ : BMP3_ODR_25_HZ;
+            Wire.setClock(100000); // 100 kHz para ahorro / forced
             break;
 
         case SensorMode::PRECISO:
@@ -171,12 +172,18 @@ public:
             Serial.println(rslt);
         }
 
-        // Modo normal (medida continua)
-        settings.op_mode = BMP3_MODE_NORMAL;
+        // Modo operativo: NORMAL (continuo) o FORCED (toma puntual y duerme)
+        settings.op_mode = forcedMode ? BMP3_MODE_FORCED : BMP3_MODE_NORMAL;
         rslt = bmp3_set_op_mode(&settings, &dev);
         if (rslt != BMP3_OK) {
             Serial.print("bmp3_set_op_mode error: ");
             Serial.println(rslt);
+        }
+
+        // Reset de cache de lectura forced
+        if (forcedMode) {
+            lastForcedSampleMs = 0;
+            forcedSampleValid  = false;
         }
 
         currentMode = mode;
@@ -188,25 +195,63 @@ public:
             return false;
         }
 
-        int8_t rslt = bmp3_get_sensor_data(BMP3_PRESS_TEMP, &data, &dev);
-        if (rslt != BMP3_OK) {
-            // DEBUG: ver por qué falla
-            static uint8_t errCount = 0;
-            if (errCount < 10) { // no spamear infinito 😅
-                Serial.print("bmp3_get_sensor_data error: ");
-                Serial.println(rslt);
-                errCount++;
+        uint32_t now = millis();
+
+        // Throttle en forced: no disparamos una conversión nueva hasta FORCED_MIN_INTERVAL_MS.
+        if (forcedMode && forcedSampleValid) {
+            if ((now - lastForcedSampleMs) < FORCED_MIN_INTERVAL_MS) {
+                pressurePa   = lastPressurePa;
+                temperatureC = lastTempC;
+                return true;
             }
+        }
+
+        int samplesToTake = forcedMode ? FORCED_SAMPLES_PER_READ : 1;
+        bool gotSample    = false;
+
+        for (int i = 0; i < samplesToTake; ++i) {
+            if (forcedMode) {
+                settings.op_mode = BMP3_MODE_FORCED;
+                int8_t setRslt = bmp3_set_op_mode(&settings, &dev);
+                if (setRslt != BMP3_OK) {
+                    continue; // intenta siguiente lectura forced si aplica
+                }
+            }
+
+            int8_t rslt = bmp3_get_sensor_data(BMP3_PRESS_TEMP, &data, &dev);
+            if (rslt != BMP3_OK) {
+                // DEBUG: ver por qué falla
+                static uint8_t errCount = 0;
+                if (errCount < 10) { // no spamear infinito 😅
+                    Serial.print("bmp3_get_sensor_data error: ");
+                    Serial.println(rslt);
+                    errCount++;
+                }
+                continue;
+            }
+
+        #ifdef BMP3_FLOAT_COMPENSATION
+            temperatureC = data.temperature;
+            pressurePa   = data.pressure;
+        #else
+            temperatureC = data.temperature / 100.0f;
+            pressurePa   = data.pressure   / 100.0f;
+        #endif
+
+            gotSample = true;
+            // Si necesitamos varias muestras forced, nos quedamos con la última
+        }
+
+        if (!gotSample) {
             return false;
         }
 
-    #ifdef BMP3_FLOAT_COMPENSATION
-        temperatureC = data.temperature;
-        pressurePa   = data.pressure;
-    #else
-        temperatureC = data.temperature / 100.0f;
-        pressurePa   = data.pressure   / 100.0f;
-    #endif
+        if (forcedMode) {
+            lastForcedSampleMs = now;
+            lastPressurePa     = pressurePa;
+            lastTempC          = temperatureC;
+            forcedSampleValid  = true;
+        }
 
         // DEBUG: ver las primeras lecturas de presión / temperatura
         static uint8_t dbgCount = 0;
@@ -230,4 +275,13 @@ private:
     struct bmp3_data     data{};
     bool                 initialized = false;
     SensorMode           currentMode = SensorMode::AHORRO;
+
+    bool     forcedMode          = false;
+    bool     forcedSampleValid   = false;
+    uint32_t lastForcedSampleMs  = 0;
+    float    lastPressurePa      = 0.0f;
+    float    lastTempC           = 0.0f;
+
+    static constexpr uint32_t FORCED_MIN_INTERVAL_MS = 500; // limita spam en modo forced
+    static constexpr int      FORCED_SAMPLES_PER_READ = 2;  // dos lecturas puntuales por wake
 };

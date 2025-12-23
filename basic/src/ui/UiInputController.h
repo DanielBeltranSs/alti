@@ -220,7 +220,8 @@ private:
         // 5: Offset
         // 6: Fecha y hora
         // 7: Idioma
-        // 8: Salir
+        // 8: Suspender (deep sleep manual)
+        // 9: Salir
 
         switch (idx) {
         case 0: { // Unidad m/ft
@@ -317,7 +318,13 @@ private:
             break;
         }
 
-        case 8: // Salir del menú
+        case 8: // Suspender
+            uiState.requestSuspend();
+            uiState.setScreen(UiScreen::MAIN); // volvemos a MAIN para permitir sleep
+            Serial.println(F("[MENU] Suspender -> solicitar deep sleep"));
+            break;
+
+        case 9: // Salir del menú
             uiState.setScreen(UiScreen::MAIN);
             Serial.println(F("[MENU] Salir -> MAIN"));
             break;

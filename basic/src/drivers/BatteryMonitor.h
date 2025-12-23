@@ -24,55 +24,57 @@ public:
         _pctInitialized = false;
         _filteredVoltage = 0.0f;
         _lastPercent     = 100;
+
+        _lastVoltageSampleMs = 0;
+        _lastChargerSampleMs = 0;
+        _chargerInitialized  = false;
     }
 
     // Voltaje de batería en voltios, filtrado.
     float getBatteryVoltage() {
-        // Oversampling fuerte (en mV calibrados)
-        const int   NUM_SAMPLES = 64;
-        uint32_t    accMv       = 0;
+        uint32_t now = millis();
 
-        for (int i = 0; i < NUM_SAMPLES; ++i) {
-            accMv += analogReadMilliVolts(PIN_BATT_VOLTAGE);
-            delayMicroseconds(200);
-        }
+        if (!_initialized || elapsed(now, _lastVoltageSampleMs) >= VOLTAGE_SAMPLE_PERIOD_MS) {
+            float vBatRaw = sampleBatteryVoltageRaw();
 
-        float avgMv = accMv / float(NUM_SAMPLES);
+            // Filtro exponencial (suaviza ruido)
+            const float alpha = 0.05f;
 
-        float vAdc = avgMv / 1000.0f;
+            if (!_initialized) {
+                _filteredVoltage = vBatRaw;
+                _initialized     = true;
+            } else {
+                _filteredVoltage = _filteredVoltage + alpha * (vBatRaw - _filteredVoltage);
+            }
 
-        // Divisor 100k/100k → VBAT = vAdc * 2
-        constexpr float VBAT_DIVIDER_RATIO = 2.0f;
-        // Calibración opcional (ajustar si tu multímetro no coincide)
-        constexpr float VBAT_CAL = 1.0f;
-
-        float vBatRaw = vAdc * VBAT_DIVIDER_RATIO * VBAT_CAL;
-
-        // Filtro exponencial (suaviza mucho el ruido)
-        const float alpha = 0.05f; // 0.05 ~ muy suave
-
-        if (!_initialized) {
-            _filteredVoltage = vBatRaw;
-            _initialized     = true;
-        } else {
-            _filteredVoltage = _filteredVoltage + alpha * (vBatRaw - _filteredVoltage);
+            _lastVoltageSampleMs = now;
         }
 
         return _filteredVoltage;
     }
 
     bool isChargerConnected() {
-        const int   NUM_SAMPLES = 8;
-        uint32_t    accMv       = 0;
+        uint32_t now = millis();
 
-        for (int i = 0; i < NUM_SAMPLES; ++i) {
-            accMv += analogReadMilliVolts(PIN_CHARGER_SENSE);
-            delayMicroseconds(200);
+        if (!_chargerInitialized ||
+            elapsed(now, _lastChargerSampleMs) >= CHARGER_SAMPLE_PERIOD_MS) {
+
+            const int   NUM_SAMPLES = 4;
+            uint32_t    accMv       = 0;
+
+            for (int i = 0; i < NUM_SAMPLES; ++i) {
+                accMv += analogReadMilliVolts(PIN_CHARGER_SENSE);
+                delayMicroseconds(150);
+            }
+
+            float avgMv = accMv / float(NUM_SAMPLES);
+            // Umbral simple: por encima de ~1.5V en el pin (con divisor 1/2 -> ~3V en USB)
+            _chargerPresent = (avgMv > CHARGER_THRESHOLD_MV);
+            _lastChargerSampleMs = now;
+            _chargerInitialized  = true;
         }
 
-        float avgMv = accMv / float(NUM_SAMPLES);
-        // Umbral simple: por encima de ~1.5V en el pin (con divisor 1/2 -> ~3V en USB)
-        return (avgMv > 1500.0f);
+        return _chargerPresent;
     }
 
     // Usa ésta en el resto del código
@@ -108,6 +110,36 @@ public:
     }
 
 private:
+    // Períodos de muestreo (cacheo) para reducir lecturas ADC.
+    static constexpr uint32_t VOLTAGE_SAMPLE_PERIOD_MS = 1000; // 1 Hz basta para políticas
+    static constexpr uint32_t CHARGER_SAMPLE_PERIOD_MS = 500;  // 2 Hz para detectar USB
+    static constexpr uint16_t CHARGER_THRESHOLD_MV     = 1500;
+
+    static uint32_t elapsed(uint32_t now, uint32_t last) {
+        return now - last; // unsigned aritmética maneja wrap
+    }
+
+    float sampleBatteryVoltageRaw() {
+        // Oversampling más liviano; cada llamada dura ~3 ms en vez de ~13 ms.
+        const int   NUM_SAMPLES = 16;
+        uint32_t    accMv       = 0;
+
+        for (int i = 0; i < NUM_SAMPLES; ++i) {
+            accMv += analogReadMilliVolts(PIN_BATT_VOLTAGE);
+            delayMicroseconds(150);
+        }
+
+        float avgMv = accMv / float(NUM_SAMPLES);
+        float vAdc  = avgMv / 1000.0f;
+
+        // Divisor 100k/100k → VBAT = vAdc * 2
+        constexpr float VBAT_DIVIDER_RATIO = 2.0f;
+        // Calibración opcional (ajustar si tu multímetro no coincide)
+        constexpr float VBAT_CAL = 1.0f;
+
+        return vAdc * VBAT_DIVIDER_RATIO * VBAT_CAL;
+    }
+
     uint8_t computePercentFromVoltage(float v) {
         // Ajusta estos umbrales según cómo veas la curva real
         constexpr float V_EMPTY = 3.30f; // 0 %
@@ -124,8 +156,13 @@ private:
         return static_cast<uint8_t>(pct + 0.5f);
     }
 
-    bool   _initialized       = false;
-    bool   _pctInitialized    = false;
-    float  _filteredVoltage   = 0.0f;
-    uint8_t _lastPercent      = 100;
+    bool     _initialized           = false;
+    bool     _pctInitialized        = false;
+    float    _filteredVoltage       = 0.0f;
+    uint8_t  _lastPercent           = 100;
+    uint32_t _lastVoltageSampleMs   = 0;
+
+    bool     _chargerInitialized    = false;
+    bool     _chargerPresent        = false;
+    uint32_t _lastChargerSampleMs   = 0;
 };

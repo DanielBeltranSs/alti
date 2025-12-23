@@ -24,6 +24,7 @@ public:
         freefallCandidateStartMs = 0;
         canopyCandidateStartMs = 0;
         groundCandidateStartMs = 0;
+        climbAbortStartMs      = 0;
 
         groundRefAlt           = 0.0f;
         freefallStartAlt       = 0.0f;
@@ -60,6 +61,7 @@ public:
         constexpr float VS_CANOPY_FLOOR_M     = -9.0f;  // por encima de esto solemos estar bajo campana
         constexpr float VS_GROUND_MAX_M       = 0.5f;   // "casi quieto" en suelo
         constexpr float GROUND_ALT_BAND_M     = 2.0f;   // ±2 m alrededor del suelo
+        constexpr float CLIMB_ABORT_ALT_M     = 150.0f; // si sube poco y se queda quieto, abortar CLIMB
 
         // --- Tiempos de persistencia ---
         constexpr uint32_t CLIMB_PERSIST_MS       = 3000; // CLIMB sostenido
@@ -68,6 +70,7 @@ public:
         constexpr uint32_t GROUND_PERSIST_MS      = 2000; // quietud para volver a suelo
         constexpr uint32_t MIN_FREEFALL_MS        = 1500; // al menos 1.5s en FF antes de canopy
         constexpr uint32_t MIN_CANOPY_MS_FOR_LAND = 3000; // tiempo mínimo en canopy antes de suelo opcional
+        constexpr uint32_t CLIMB_ABORT_STABLE_MS  = 30000; // 15s quieto en altitud baja -> abortar CLIMB
 
         // --- Conversión de umbrales según unidad ---
         float vsClimbMin      = (unit == UnitType::METERS) ? VS_CLIMB_MIN_M        : VS_CLIMB_MIN_M        * M_TO_FT;
@@ -78,6 +81,7 @@ public:
         float vsCanopyFloor   = (unit == UnitType::METERS) ? VS_CANOPY_FLOOR_M     : VS_CANOPY_FLOOR_M     * M_TO_FT;
         float vsGroundMax     = (unit == UnitType::METERS) ? VS_GROUND_MAX_M       : VS_GROUND_MAX_M       * M_TO_FT;
         float groundAltBand   = (unit == UnitType::METERS) ? GROUND_ALT_BAND_M     : GROUND_ALT_BAND_M     * M_TO_FT;
+        float climbAbortAlt   = (unit == UnitType::METERS) ? CLIMB_ABORT_ALT_M     : CLIMB_ABORT_ALT_M     * M_TO_FT;
 
         float altAboveGround  = alt.rawAlt - groundRefAlt;
         float vs              = alt.verticalSpeed;
@@ -168,6 +172,27 @@ public:
                 }
             } else {
                 groundCandidateStartMs = 0;
+            }
+
+            // Abortador de CLIMB: si estamos bajos, sin freefall y quietos mucho tiempo.
+            if (altAboveGround < climbAbortAlt &&
+                fabsf(vs) < vsGroundMax)
+            {
+                if (climbAbortStartMs == 0) {
+                    climbAbortStartMs = nowMs;
+                }
+                if ((nowMs - climbAbortStartMs) >= CLIMB_ABORT_STABLE_MS) {
+                    phase = FlightPhase::GROUND;
+                    lastPhaseChangeMs      = nowMs;
+                    climbAbortStartMs      = 0;
+                    climbCandidateStartMs  = 0;
+                    freefallCandidateStartMs = 0;
+                    canopyCandidateStartMs = 0;
+                    groundCandidateStartMs = 0;
+                    groundRefAlt           = alt.rawAlt; // rebase para no quedar alto artificialmente
+                }
+            } else {
+                climbAbortStartMs = 0;
             }
 
             break;
@@ -274,6 +299,7 @@ private:
     uint32_t    freefallCandidateStartMs = 0;
     uint32_t    canopyCandidateStartMs   = 0;
     uint32_t    groundCandidateStartMs   = 0;
+    uint32_t    climbAbortStartMs        = 0;
 
     // Referencia de suelo (altura backend donde consideramos "0")
     float       groundRefAlt       = 0.0f;
