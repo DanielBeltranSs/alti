@@ -10,6 +10,7 @@
 #include "ui/MenuRenderer.h"
 #include "ui/OffsetScreenRenderer.h"
 #include "ui/DateTimeScreenRenderer.h"
+#include "ui/IconsScreenRenderer.h"
 
 class BatteryMonitor;
 
@@ -23,7 +24,8 @@ public:
           mainRenderer(lcdDriver),
           menuRenderer(lcdDriver),
           offsetRenderer(lcdDriver),
-          dateTimeRenderer(lcdDriver) {}
+          dateTimeRenderer(lcdDriver),
+          iconsRenderer(lcdDriver) {}
 
     void begin() {
         // Nada especial de momento; LcdDriver::begin() ya inicializa u8g2
@@ -36,6 +38,7 @@ public:
 
     // Renderiza la pantalla principal según el contexto de ahorro.
     void renderMainIfNeeded(const MainUiModel& model,
+                            const HudConfig& hudCfg,
                             bool inAhorroMain,
                             UiScreen screen,
                             uint32_t nowMs)
@@ -52,7 +55,7 @@ public:
 
         bool mustRepaint = false;
         if (inAhorroMain) {
-            mustRepaint = repaintController.shouldRepaint(model, nowMs);
+            mustRepaint = repaintController.shouldRepaint(model, hudCfg, nowMs);
         } else {
             repaintController.reset();
             mustRepaint = true;
@@ -60,7 +63,7 @@ public:
 
         if (mustRepaint) {
             repaintCounter++;
-            mainRenderer.render(model, repaintCounter);
+            mainRenderer.render(model, hudCfg, repaintCounter);
         }
 
         lastScreen = screen;
@@ -85,6 +88,12 @@ public:
         dateTimeRenderer.render(st, lang);
     }
 
+    void renderIconsMenu(uint8_t selectedIdx,
+                         const HudConfig& hud,
+                         Language lang) {
+        iconsRenderer.render(selectedIdx, hud, lang);
+    }
+
 private:
     LcdDriver*      lcd  = nullptr;
     BatteryMonitor* batt = nullptr; // reservado para futuro icono batería
@@ -94,6 +103,7 @@ private:
     MainRepaintController repaintController;
     OffsetScreenRenderer  offsetRenderer;
     DateTimeScreenRenderer dateTimeRenderer;
+    IconsScreenRenderer   iconsRenderer;
 
     UiScreen  lastScreen     = UiScreen::MAIN;
     uint32_t  repaintCounter = 0;

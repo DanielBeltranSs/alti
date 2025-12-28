@@ -20,4 +20,9 @@ constexpr uint8_t UI_BRIGHTNESS_HIGH = 2;
 constexpr const uint8_t* UI_FONT_ALT_MAIN   = u8g2_font_logisoso32_tn;
 constexpr const uint8_t* UI_FONT_TEXT_SMALL = u8g2_font_6x10_tf;
 
-constexpr uint8_t UI_MENU_ITEM_COUNT = 10;
+constexpr uint8_t UI_MENU_ITEM_COUNT = 12;
+
+// Número de iconos configurables en la pantalla principal.
+// Iconos configurables (flechas, hora, temperatura) + opción de volver.
+constexpr uint8_t UI_HUD_ICON_COUNT = 3;
+constexpr uint8_t UI_HUD_MENU_COUNT = UI_HUD_ICON_COUNT + 1; // incluye "Volver"

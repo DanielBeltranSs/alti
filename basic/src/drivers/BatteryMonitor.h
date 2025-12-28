@@ -34,16 +34,22 @@ public:
     float getBatteryVoltage() {
         uint32_t now = millis();
 
-        if (!_initialized || elapsed(now, _lastVoltageSampleMs) >= VOLTAGE_SAMPLE_PERIOD_MS) {
+        uint32_t gapMs = elapsed(now, _lastVoltageSampleMs);
+
+        if (!_initialized || gapMs >= VOLTAGE_SAMPLE_PERIOD_MS) {
             float vBatRaw = sampleBatteryVoltageRaw();
 
             // Filtro exponencial (suaviza ruido)
-            const float alpha = 0.05f;
+            float alpha = 0.05f;
 
             if (!_initialized) {
                 _filteredVoltage = vBatRaw;
                 _initialized     = true;
             } else {
+                // Si ha pasado mucho tiempo dormidos, reancla al valor actual.
+                if (gapMs >= FILTER_RESET_GAP_MS) {
+                    alpha = 1.0f; // salto directo
+                }
                 _filteredVoltage = _filteredVoltage + alpha * (vBatRaw - _filteredVoltage);
             }
 
@@ -79,7 +85,10 @@ public:
 
     // Usa ésta en el resto del código
     uint8_t getBatteryPercent() {
-        float   v        = getBatteryVoltage();
+        uint32_t now             = millis();
+        uint32_t gapSinceLastVolt = elapsed(now, _lastVoltageSampleMs); // calcula antes de actualizar
+
+        float   v        = getBatteryVoltage(); // actualiza _lastVoltageSampleMs internamente
         bool    charging = isChargerConnected();
         uint8_t rawPct   = computePercentFromVoltage(v);
 
@@ -91,6 +100,14 @@ public:
 
         // Descargando (sin cargador): NO permitimos subir por ruido.
         if (!charging) {
+            // Si venimos de un gap largo, permitimos reanclar directo para no quedarnos desfasados.
+            if (_lastVoltageSampleMs != 0 &&
+                gapSinceLastVolt >= FILTER_RESET_GAP_MS)
+            {
+                _lastPercent = rawPct;
+                return _lastPercent;
+            }
+
             if (rawPct < _lastPercent) {
                 // Baja de 1 en 1 como pediste
                 _lastPercent -= 1;
@@ -114,6 +131,7 @@ private:
     static constexpr uint32_t VOLTAGE_SAMPLE_PERIOD_MS = 1000; // 1 Hz basta para políticas
     static constexpr uint32_t CHARGER_SAMPLE_PERIOD_MS = 500;  // 2 Hz para detectar USB
     static constexpr uint16_t CHARGER_THRESHOLD_MV     = 1500;
+    static constexpr uint32_t FILTER_RESET_GAP_MS      = 30000; // si pasan 30s, reanclamos
 
     static uint32_t elapsed(uint32_t now, uint32_t last) {
         return now - last; // unsigned aritmética maneja wrap

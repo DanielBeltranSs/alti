@@ -59,6 +59,9 @@ public:
         case UiScreen::MENU_DATETIME:
             handleDateTimeScreenButton(ev, logicalId);
             break;
+        case UiScreen::MENU_ICONS:
+            handleIconsScreenButton(ev, logicalId);
+            break;
         default:
             // Otros submenús en el futuro
             handleMenuScreenButton(ev, logicalId, locked);
@@ -214,14 +217,16 @@ private:
         // Orden de items:
         // 0: Unidad
         // 1: Brillo
-        // 2: Bitácora
-        // 3: Ahorro
-        // 4: Invertir
-        // 5: Offset
-        // 6: Fecha y hora
-        // 7: Idioma
-        // 8: Suspender (deep sleep manual)
-        // 9: Salir
+        // 2: Iconos HUD
+        // 3: Bitácora
+        // 4: Ahorro
+        // 5: Invertir
+        // 6: Offset
+        // 7: Fecha y hora
+        // 8: Idioma
+        // 9: Suspender (deep sleep manual)
+        // 10: Juego (demo)
+        // 11: Salir
 
         switch (idx) {
         case 0: { // Unidad m/ft
@@ -267,13 +272,20 @@ private:
         }
 
 
-        case 2: // Bitácora (TODO submenú)
+        case 2: { // Iconos HUD
+            uiState.setIconMenuIndex(0);
+            uiState.setScreen(UiScreen::MENU_ICONS);
+            Serial.println(F("[MENU] Iconos HUD"));
+            break;
+        }
+
+        case 3: // Bitácora (TODO submenú)
             logbookUi.enter();
             uiState.setScreen(UiScreen::MENU_LOGBOOK);
             Serial.println(F("[MENU] Bitacora -> UI"));
             break;
 
-        case 3: { // Ahorro (deep sleep timeout option 0..2)
+        case 4: { // Ahorro (deep sleep timeout option 0..2)
             settings.ahorroTimeoutOption =
                 (settings.ahorroTimeoutOption + 1) % 4; // agrega OFF (3)
             settingsService.save(settings);
@@ -282,7 +294,7 @@ private:
             break;
         }
 
-        case 4: { // Invertir pantalla
+        case 5: { // Invertir pantalla
             settings.inverPant = !settings.inverPant;
             settingsService.save(settings);
             lcd.setRotation(settings.inverPant);
@@ -291,13 +303,13 @@ private:
             break;
         }
 
-        case 5: // Offset (editor más adelante)
+        case 6: // Offset (editor más adelante)
             uiState.startOffsetEdit(settings.alturaOffset);
             uiState.setScreen(UiScreen::MENU_OFFSET);
             Serial.println(F("[MENU] Offset editor"));
             break;
 
-        case 6: // Fecha y hora (editor más adelante)
+        case 7: // Fecha y hora (editor más adelante)
             {
                 UtcDateTime now = rtcDrv.nowUtc();
                 uiState.startDateTimeEdit(now);
@@ -306,7 +318,7 @@ private:
             }
             break;
 
-        case 7: { // Idioma ES/EN
+        case 8: { // Idioma ES/EN
             if (settings.idioma == Language::ES) {
                 settings.idioma = Language::EN;
             } else {
@@ -318,13 +330,18 @@ private:
             break;
         }
 
-        case 8: // Suspender
+        case 9: // Suspender
             uiState.requestSuspend();
             uiState.setScreen(UiScreen::MAIN); // volvemos a MAIN para permitir sleep
             Serial.println(F("[MENU] Suspender -> solicitar deep sleep"));
             break;
 
-        case 9: // Salir del menú
+        case 10: // Juego
+            uiState.setScreen(UiScreen::GAME);
+            Serial.println(F("[MENU] Juego -> DEMO"));
+            break;
+
+        case 11: // Salir del menú
             uiState.setScreen(UiScreen::MAIN);
             Serial.println(F("[MENU] Salir -> MAIN"));
             break;
@@ -442,5 +459,60 @@ private:
                 return;
             }
         }
+    }
+
+    // --- Iconos HUD ---
+    void handleIconsScreenButton(const ButtonEvent& ev, ButtonId logicalId) {
+        if (ev.type != ButtonEventType::PRESS &&
+            ev.type != ButtonEventType::REPEAT &&
+            ev.type != ButtonEventType::LONG_PRESS_3S &&
+            ev.type != ButtonEventType::LONG_PRESS_6S) {
+            return;
+        }
+
+        uint8_t idx = uiState.getIconMenuIndex();
+
+        auto wrap = [](int v) {
+            if (v < 0) return (int)(UI_HUD_MENU_COUNT - 1);
+            if (v >= UI_HUD_MENU_COUNT) return 0;
+            return v;
+        };
+
+        // Navegación
+        if (logicalId == ButtonId::UP &&
+            (ev.type == ButtonEventType::PRESS || ev.type == ButtonEventType::REPEAT)) {
+            idx = (uint8_t)wrap((int)idx - 1);
+            uiState.setIconMenuIndex(idx);
+            return;
+        }
+
+        if (logicalId == ButtonId::DOWN &&
+            (ev.type == ButtonEventType::PRESS || ev.type == ButtonEventType::REPEAT)) {
+            idx = (uint8_t)wrap((int)idx + 1);
+            uiState.setIconMenuIndex(idx);
+            return;
+        }
+
+        // Toggle
+        if (logicalId == ButtonId::MID &&
+            ev.type == ButtonEventType::PRESS) {
+            if (idx < UI_HUD_ICON_COUNT) {
+                toggleHudOption(idx);
+            } else {
+                uiState.setScreen(UiScreen::MENU_ROOT); // Volver
+            }
+            return;
+        }
+    }
+
+    void toggleHudOption(uint8_t idx) {
+        switch (idx) {
+        case 0: settings.hud.showArrows = !settings.hud.showArrows; break;
+        case 1: settings.hud.showTime   = !settings.hud.showTime;   break;
+        case 2: settings.hud.showTemp   = !settings.hud.showTemp;   break;
+        default: return;
+        }
+        settingsService.save(settings);
+        Serial.printf("[HUD] idx=%u mask=0x%02X\n", static_cast<unsigned>(idx), settings.hud.toMask());
     }
 };

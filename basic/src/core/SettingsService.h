@@ -6,6 +6,29 @@
 // Servicio de configuración persistente sobre NVS.
 // Guarda: unidades, brillo, tiempo de ahorro, offset, idioma, invert, usuario.
 
+struct HudConfig {
+    // Iconos opcionales
+    bool showArrows = true;
+    bool showTime   = true;
+    bool showTemp   = true;
+
+    uint8_t toMask() const {
+        uint8_t m = 0;
+        if (showArrows) m |= 1 << 0;
+        if (showTime)   m |= 1 << 1;
+        if (showTemp)   m |= 1 << 2;
+        return m;
+    }
+
+    static HudConfig fromMask(uint8_t mask) {
+        HudConfig c;
+        c.showArrows = (mask & (1 << 0)) != 0;
+        c.showTime   = (mask & (1 << 1)) != 0;
+        c.showTemp   = (mask & (1 << 2)) != 0;
+        return c;
+    }
+};
+
 struct Settings {
     UnitType   unidadMetros        = UnitType::METERS;
     uint8_t    brilloPantalla      = 1;     // 0=low, 1=medium, 2=high
@@ -14,6 +37,7 @@ struct Settings {
     Language   idioma              = Language::ES;
     bool       inverPant           = false; // true = invertir pantalla
     uint8_t    usrActual           = 0;     // reservado multi-usuario
+    HudConfig  hud;                        // configuración de iconos de pantalla principal
 };
 
 class SettingsService {
@@ -68,6 +92,10 @@ Serial.println(s.alturaOffset);
         // Usuario actual
         s.usrActual = prefs.getUChar("user", 0);
 
+        // HUD (iconos)
+        uint8_t hudMask = prefs.getUChar("hudmask", HudConfig{}.toMask()); // default: ON
+        s.hud = HudConfig::fromMask(hudMask);
+
         return s;
     }
 
@@ -80,6 +108,7 @@ Serial.println(s.alturaOffset);
         prefs.putUChar("lang",   static_cast<uint8_t>(s.idioma));
         prefs.putBool("invert",  s.inverPant);
         prefs.putUChar("user",   s.usrActual);
+        prefs.putUChar("hudmask", s.hud.toMask());
     }
 
 private:

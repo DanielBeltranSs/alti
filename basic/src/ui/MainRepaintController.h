@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "ui/UiModels.h"
+#include "core/SettingsService.h"
 
 // Controla cuándo repintar la pantalla principal según las reglas de ahorro.
 // Separa la lógica de “gating” del renderer para mantener el código legible.
@@ -18,6 +19,7 @@ public:
         state.first        = true;
         state.lastBattPct  = 255;
         state.lastMinute   = 0xFFFF;
+        state.lastHudMask  = 0xFF;
         state.haveLastTime = false;
         state.haveLastTemp = false;
         memset(state.lastTimeText, 0, sizeof(state.lastTimeText));
@@ -25,14 +27,30 @@ public:
     }
 
     // Devuelve true si corresponde repintar en modo ahorro (MAIN + suelo + sin lock).
-    bool shouldRepaint(const MainUiModel& model, uint32_t nowMs) {
+    bool shouldRepaint(const MainUiModel& model,
+                       const HudConfig& hudCfg,
+                       uint32_t nowMs) {
         bool repaint = false;
+
+        uint8_t hudMask = hudCfg.toMask();
+
+        bool lockVisible     = model.lockActive; // no removible
+        bool climbVisible    = hudCfg.showArrows && model.climbing;
+        bool ffVisible       = hudCfg.showArrows && model.freefall;
+        bool zzzVisible      = model.showZzz;    // no removible
+        bool chargingVisible = model.charging;   // no removible
+        bool timeVisible     = hudCfg.showTime;
+        bool tempVisible     = hudCfg.showTemp;
 
         if (state.first) {
             repaint = true;
         }
 
         if (forceMainRepaint) {
+            repaint = true;
+        }
+
+        if (state.lastHudMask == 0xFF || state.lastHudMask != hudMask) {
             repaint = true;
         }
 
@@ -47,33 +65,45 @@ public:
             repaint = true;
         }
 
-        if (model.charging != state.lastCharging) {
+        if (chargingVisible != state.lastCharging) {
             repaint = true;
         }
 
-        if (model.showZzz != state.lastZzz) {
+        if (zzzVisible != state.lastZzz) {
             repaint = true;
         }
 
-        if (model.lockActive != state.lastLock) {
+        if (lockVisible != state.lastLock) {
+            repaint = true;
+        }
+
+        if (climbVisible != state.lastClimb) {
+            repaint = true;
+        }
+
+        if (ffVisible != state.lastFreefall) {
             repaint = true;
         }
 
         uint16_t minute = minuteTickFromNow(nowMs);
-        if (state.lastMinute == 0xFFFF || minute != state.lastMinute) {
-            repaint = true;
-        }
+        if (timeVisible) {
+            if (state.lastMinute == 0xFFFF || minute != state.lastMinute) {
+                repaint = true;
+            }
 
-        if (!state.haveLastTime ||
-            strncmp(model.timeText, state.lastTimeText, sizeof(model.timeText)) != 0) {
-            repaint = true;
+            if (!state.haveLastTime ||
+                strncmp(model.timeText, state.lastTimeText, sizeof(model.timeText)) != 0) {
+                repaint = true;
+            }
         }
 
         bool tempFinite = isfinite(model.temperatureC);
         int16_t tempInt = tempFinite ? (int16_t)lroundf(model.temperatureC) : 0;
-        if (tempFinite != state.haveLastTemp ||
-            (tempFinite && tempInt != state.lastTempInt)) {
-            repaint = true;
+        if (tempVisible) {
+            if (tempFinite != state.haveLastTemp ||
+                (tempFinite && tempInt != state.lastTempInt)) {
+                repaint = true;
+            }
         }
 
         if (repaint) {
@@ -81,16 +111,23 @@ public:
             state.haveLastAlt  = true;
             state.lastAltShown = altShown;
             state.lastBattPct  = model.batteryPercent;
-            state.lastCharging = model.charging;
-            state.lastZzz      = model.showZzz;
-            state.lastLock     = model.lockActive;
-            state.lastMinute   = minute;
+            state.lastCharging = chargingVisible;
+            state.lastZzz      = zzzVisible;
+            state.lastLock     = lockVisible;
+            state.lastClimb    = climbVisible;
+            state.lastFreefall = ffVisible;
+            state.lastMinute   = timeVisible ? minute : state.lastMinute;
+            state.lastHudMask  = hudMask;
 
-            state.haveLastTime = true;
-            strncpy(state.lastTimeText, model.timeText, sizeof(state.lastTimeText));
+            if (timeVisible) {
+                state.haveLastTime = true;
+                strncpy(state.lastTimeText, model.timeText, sizeof(state.lastTimeText));
+            }
 
-            state.haveLastTemp = tempFinite;
-            state.lastTempInt  = tempInt;
+            if (tempVisible) {
+                state.haveLastTemp = tempFinite;
+                state.lastTempInt  = tempInt;
+            }
 
             forceMainRepaint = false;
         }
@@ -111,7 +148,10 @@ private:
         bool     lastCharging = false;
         bool     lastZzz      = false;
         bool     lastLock     = false;
+        bool     lastClimb    = false;
+        bool     lastFreefall = false;
         uint16_t lastMinute   = 0xFFFF;
+        uint8_t  lastHudMask  = 0xFF;
 
         bool     haveLastTime = false;
         char     lastTimeText[6] = {0};

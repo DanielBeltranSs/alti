@@ -20,7 +20,7 @@ framework = arduino
 monitor_speed = 115200
 Funcionamiento en cuanto a consumo de bateria:
 Ya que en paracaidismo deportivo un altimetro pasa la mayor cantidad de tiempo en suelo lo que buscamos es un funcionamiento orientado al bajo consumo cuando estoy en el suelo. Para esto definimos distinto estados en los que puede estar un altimetro (suelo/ahorro, en vuelo, en caida libre y bajo campana) y definimos lo siguiente:
-1. el procesador funciona en frecuencias variables de cpu: suelo 40mhz, en vuelo y bajo campana 100mhz y caida libre en 160mhz
+1. el procesador funciona en frecuencias variables de cpu: suelo 40mhz, en vuelo y bajo campana 80mhz y caida libre en 160mhz
 2. En modo suelo se aplica light sleep entre lecturas, maximizando el tiempo dormido, con un duty cycle orientado a ahorrar batería (en realidad debe ser lo maximo posible que permita prolongar bateria sin romper funcionalidad)
 3. en light sleep los botones deben seguir "atentos" para activar sus funciones en pantalla principal (detalladas mas abajo) y deben tener un tiempo de gracia de no sleep para asegurar la fluidez de la ui.
 4. el menu de la ui será la excepcion de light sleep, si estamos en el no activaremos light sleep y subiremos frecuencia de procesador a 80mhz
@@ -34,7 +34,6 @@ Ya que en paracaidismo deportivo un altimetro pasa la mayor cantidad de tiempo e
 -cambie el porcentaje de bateria
 -conectemos cargador
 -volvamos a pantalla principal desde el menu
-cualquier repintado debe dejar un tiempo de gracia de no sleep para asegurar la fluidez de la ui.
 Funcionamiento de los botones:
 en pantalla principal
 -boton arriba enciende el led de la pantalla
@@ -47,7 +46,7 @@ Pantalla principal:
 altimetro enciende, muestra cuenta regresiva mientras por detras inicia los distintos modulos y setea la altura en cero luego se muestra la pantalla principal que contiene: altura seteada en cero, hora, temperatura, unidad de medida de la altura, porcentaje de bateria, numero de saltos, candado en caso de activar lock, flecha arriba cuando se detecta que estamos en vuelo por aumento de altura, flecha abajo cuando se detecta freefall, dibujo de zzz cuando queden 5 minutos para entrar en deep sleep y un icono de carga que aparece al detectar carga.
 menu: arriba pone la fecha y abajo numero de pagina
 unidad de medida: permite seleccionar entre metros o pies
-brillo: permite seleccionar nivel de backlight del lcd entre bajo, medio o alto
+brillo: permite prender o apagar el backlight del lcd (sin niveles intermedios)
 bitacora:abre el menu de bitacora (en backend es binario circular en LittleFS). se permite hacer un reset de bitacora con confirmacion (mantengo arriba y abajo por 3 segundos luego me pide confirmacion y repito la accion para borrar). guardaremos el salto cuando tengamos suelo estable. Guarda por salto:
 ID de salto.
 Fecha/hora UTC.
@@ -91,7 +90,7 @@ Ejemplos:
 17000 ft 17.0
 12000 ft 12.0
 10500 m 10.5
-Ademas para caida libre mostraremos alturas en multiplos de 5 para comodidad del usuario, es decir alturas "sueltas" como 10.1 se mostraran como 10.0
+Ademas para caida libre, en el tramo que se muestra con dos decimales, las cifras se cuantizan en pasos de 0.05k (ej: 4.55 → 4.50 → 4.45) para que no maree durante la caída.
 Persistencia en NVS
 Qué cosas se guardan:
 unidadMetros

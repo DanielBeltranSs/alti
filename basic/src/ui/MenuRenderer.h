@@ -88,7 +88,7 @@ private:
             } else {
                 return (settings.brilloPantalla == 0) ? " Des" : " Act";
             }
-        case 3: // Ahorro
+        case 4: // Ahorro
             switch (settings.ahorroTimeoutOption) {
             default:
             case 0: return " 5m";
@@ -96,9 +96,9 @@ private:
             case 2: return " 20m";
             case 3: return (lang == Language::EN) ? " Off" : " Off";
             }
-        case 4: // Invertir
+        case 5: // Invertir
             return settings.inverPant ? " On" : " Off";
-        case 7: // Idioma
+        case 8: // Idioma
             return (settings.idioma == Language::ES) ? " ES" : " EN";
         default:
             return "";

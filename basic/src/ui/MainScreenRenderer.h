@@ -6,13 +6,16 @@
 #include "drivers/LcdDriver.h"
 #include "util/AltFormat.h"
 #include "ui/UiModels.h"
+#include "core/SettingsService.h"
 
 // Renderiza la pantalla principal (altitud, hora, iconos).
 class MainScreenRenderer {
 public:
     MainScreenRenderer(LcdDriver* lcdDriver) : lcd(lcdDriver) {}
 
-    void render(const MainUiModel& model, uint32_t repaintCounter) {
+    void render(const MainUiModel& model,
+                const HudConfig& hudCfg,
+                uint32_t repaintCounter) {
         if (!lcd) return;
 
         U8G2& u8g2 = lcd->getU8g2();
@@ -36,13 +39,13 @@ public:
         }
 
         uint16_t timeW = 0;
-        if (model.timeText[0] != '\0') {
+        if (hudCfg.showTime && model.timeText[0] != '\0') {
             u8g2.drawStr(xTop, yTop, model.timeText);
             timeW = u8g2.getStrWidth(model.timeText);
         }
 
         // Temperatura (C) si hay espacio entre hora y batería
-        if (isfinite(model.temperatureC)) {
+        if (hudCfg.showTemp && isfinite(model.temperatureC)) {
             char tempBuf[12];
             int tInt = (int)lroundf(model.temperatureC);
             snprintf(tempBuf, sizeof(tempBuf), "%dC", tInt);
@@ -75,11 +78,11 @@ public:
             u8g2.setFont(UI_FONT_TEXT_SMALL);
         }
 
-        if (model.climbing) {
+        if (model.climbing && hudCfg.showArrows) {
             u8g2.drawTriangle(20, yStatus+8,  26, yStatus-2,  32, yStatus+8);
         }
 
-        if (model.freefall) {
+        if (model.freefall && hudCfg.showArrows) {
             uint8_t x0 = 96;
             u8g2.drawTriangle(x0, yStatus-2, x0+6, yStatus+8, x0+12, yStatus-2);
         }

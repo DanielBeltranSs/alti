@@ -36,7 +36,9 @@ enum class UiScreen : uint8_t {
     MENU_INVERT,
     MENU_OFFSET,
     MENU_DATETIME,
-    MENU_LANGUAGE
+    MENU_LANGUAGE,
+    MENU_ICONS,
+    GAME
 };
 
 // Flight phases identified by FlightPhaseService.

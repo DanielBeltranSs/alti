@@ -11,6 +11,7 @@
 #include "core/LogbookService.h"
 #include "core/JumpRecorder.h"
 #include "ui/LogbookUi.h"
+#include "game/DoomMiniGame.h"
 
 // Instancias globales de servicios y drivers.
 SettingsService    gSettingsService;
@@ -29,6 +30,7 @@ PowerHw            gPowerHw;
 UiRenderer         gUiRenderer(&gLcdDriver, &gBatteryMonitor);
 LogbookService     gLogbook;
 LogbookUi          gLogbookUi(&gLogbook, &gLcdDriver);
+DoomMiniGame       gGame;
 
 AppContext         gAppCtx;
 Settings           gSettings;
@@ -103,6 +105,7 @@ void setup() {
     gUiStateService.begin();
     gJumpRecorder.begin(&gLogbook, &gRtcDriver);
     gUiRenderer.begin();
+    gGame.begin(&gLcdDriver, &gUiStateService);
 
     // Contexto
     setupContext();
@@ -119,10 +122,23 @@ void loop() {
     ButtonEvent ev;
     while (gButtonsDriver.poll(ev)) {
         gUiStateService.notifyInteraction(now);
-        gUiInputController.handleEvent(ev, now);
+        UiScreen currentScreen = gUiStateService.getScreen();
 
-        // Cualquier botón → la próxima vez que estemos en MAIN/AHORRO se repinta
-        gUiRenderer.notifyMainInteraction();
+        // Map a logical id respetando inversión
+        ButtonId logicalId = ev.id;
+        if (gSettings.inverPant) {
+            if (ev.id == ButtonId::UP)   logicalId = ButtonId::DOWN;
+            else if (ev.id == ButtonId::DOWN) logicalId = ButtonId::UP;
+        }
+
+        if (currentScreen == UiScreen::GAME) {
+            // Sólo el juego consume eventos; evitamos que la UI cambie de pantalla accidentalmente.
+            gGame.handleButton(logicalId, ev.type);
+        } else {
+            gUiInputController.handleEvent(ev, now);
+            // Cualquier botón → la próxima vez que estemos en MAIN/AHORRO se repinta
+            gUiRenderer.notifyMainInteraction();
+        }
     }
 
     // 2) Altimetría y fase de vuelo
@@ -184,7 +200,7 @@ void loop() {
             (dec.sensorMode == SensorMode::AHORRO ||
              dec.sensorMode == SensorMode::AHORRO_FORCED);
 
-        gUiRenderer.renderMainIfNeeded(model, inAhorroMain, screen, now);
+        gUiRenderer.renderMainIfNeeded(model, gSettings.hud, inAhorroMain, screen, now);
     } else if (screen == UiScreen::MENU_ROOT) {
         // Render del menú raíz
         UtcDateTime nowUtc = gRtcDriver.nowUtc();
@@ -199,6 +215,14 @@ void loop() {
     } else if (screen == UiScreen::MENU_DATETIME) {
         const auto& st = gUiStateService.getDateTimeEdit();
         gUiRenderer.renderDateTimeEditor(st, gSettings.idioma);
+    } else if (screen == UiScreen::MENU_ICONS) {
+        uint8_t idx = gUiStateService.getIconMenuIndex();
+        gUiRenderer.renderIconsMenu(idx, gSettings.hud, gSettings.idioma);
+    } else if (screen == UiScreen::GAME) {
+        if (!gGame.isRunning()) {
+            gGame.start(now);
+        }
+        gGame.update(now);
     }
 
 
@@ -211,4 +235,9 @@ void loop() {
     }
 
     gPowerHw.apply(dec);
+
+    // Si salimos del juego, asegúrate de detener su ciclo
+    if (gUiStateService.getScreen() != UiScreen::GAME && gGame.isRunning()) {
+        gGame.stop();
+    }
 }

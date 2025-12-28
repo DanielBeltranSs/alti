@@ -70,7 +70,7 @@ public:
         constexpr uint32_t GROUND_PERSIST_MS      = 2000; // quietud para volver a suelo
         constexpr uint32_t MIN_FREEFALL_MS        = 1500; // al menos 1.5s en FF antes de canopy
         constexpr uint32_t MIN_CANOPY_MS_FOR_LAND = 3000; // tiempo mínimo en canopy antes de suelo opcional
-        constexpr uint32_t CLIMB_ABORT_STABLE_MS  = 30000; // 15s quieto en altitud baja -> abortar CLIMB
+        constexpr uint32_t CLIMB_ABORT_STABLE_MS  = 30000; // 30s quieto en altitud baja -> abortar CLIMB
 
         // --- Conversión de umbrales según unidad ---
         float vsClimbMin      = (unit == UnitType::METERS) ? VS_CLIMB_MIN_M        : VS_CLIMB_MIN_M        * M_TO_FT;

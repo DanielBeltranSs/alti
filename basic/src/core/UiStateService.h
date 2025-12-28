@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include "util/Types.h"
+#include "include/config_ui.h"
 
 // UiStateService manages the current UI screen, lock state, menu selection index,
 // and tracks the last user interaction time.  Other components query this to
@@ -15,6 +16,7 @@ public:
         menuIndex               = 0;
         offsetEditValue         = 0.0f;
         suspendRequested        = false;
+        iconMenuIndex           = 0;
     }
 
     // Notify that the user interacted (e.g., pressed a button).
@@ -39,6 +41,13 @@ public:
     // Índice de selección del menú raíz (y futuros submenús).
     uint8_t getMenuIndex() const { return menuIndex; }
     void setMenuIndex(uint8_t idx) { menuIndex = idx; }
+
+    // Índice de selección para la pantalla de iconos HUD.
+    uint8_t getIconMenuIndex() const { return iconMenuIndex; }
+    void setIconMenuIndex(uint8_t idx) {
+        if (idx >= UI_HUD_MENU_COUNT) idx = 0;
+        iconMenuIndex = idx;
+    }
 
     // Auto-release del lock cuando llevamos cierto tiempo en suelo estable.
     //
@@ -213,4 +222,6 @@ private:
     DateTimeEditState dtEdit{};
 
     bool suspendRequested = false;
+
+    uint8_t iconMenuIndex = 0;
 };
