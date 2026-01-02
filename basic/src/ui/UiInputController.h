@@ -11,20 +11,22 @@
 
 class UiInputController {
 public:
-    UiInputController(UiStateService&   uiState,
-                      Settings&         settings,
-                      SettingsService&  settingsService,
-                      AltimetryService& altimetry,
-                      LcdDriver&        lcd,
-                      LogbookUi&        logbookUi,
-                      RtcDs3231Driver&  rtc)
+    UiInputController(UiStateService&    uiState,
+                      Settings&          settings,
+                      SettingsService&   settingsService,
+                      AltimetryService&  altimetry,
+                      LcdDriver&         lcd,
+                      LogbookUi&         logbookUi,
+                      RtcDs3231Driver&   rtc,
+                      FlightPhaseService& flightPhase)
         : uiState(uiState),
           settings(settings),
           settingsService(settingsService),
           altimetry(altimetry),
           lcd(lcd),
           logbookUi(logbookUi),
-          rtcDrv(rtc)
+          rtcDrv(rtc),
+          flight(&flightPhase)
     {}
 
     void handleEvent(const ButtonEvent& ev, uint32_t nowMs) {
@@ -77,6 +79,7 @@ private:
     LcdDriver&        lcd;
     LogbookUi&        logbookUi;
     RtcDs3231Driver&  rtcDrv;
+    FlightPhaseService* flight = nullptr;
 
     // Estado del backlight (para toggle). Arrancamos apagado.
     bool backlightOn = false;
@@ -149,9 +152,10 @@ private:
         // DOWN: lock / unlock según long-press
         if (logicalId == ButtonId::DOWN) {
 
-            // ACTIVAR LOCK: long press 3s desde estado desbloqueado
+            // ACTIVAR LOCK: sólo en suelo (fase GROUND) y desbloqueado
             if (!locked &&
-                ev.type == ButtonEventType::LONG_PRESS_3S) {
+                ev.type == ButtonEventType::LONG_PRESS_3S &&
+                flight && flight->getPhase() == FlightPhase::GROUND) {
 
                 uiState.setLocked(true);
 
@@ -214,16 +218,16 @@ private:
     }
 
     void handleMenuSelect(uint8_t idx) {
-        // Orden de items:
+        // Orden de items (toggles primero, luego subpantallas/acciones):
         // 0: Unidad
         // 1: Brillo
-        // 2: Iconos HUD
-        // 3: Bitácora
-        // 4: Ahorro
-        // 5: Invertir
-        // 6: Offset
-        // 7: Fecha y hora
-        // 8: Idioma
+        // 2: Ahorro
+        // 3: Invertir
+        // 4: Idioma
+        // 5: Iconos HUD
+        // 6: Bitácora
+        // 7: Offset
+        // 8: Fecha y hora
         // 9: Suspender (deep sleep manual)
         // 10: Juego (demo)
         // 11: Salir
@@ -272,20 +276,7 @@ private:
         }
 
 
-        case 2: { // Iconos HUD
-            uiState.setIconMenuIndex(0);
-            uiState.setScreen(UiScreen::MENU_ICONS);
-            Serial.println(F("[MENU] Iconos HUD"));
-            break;
-        }
-
-        case 3: // Bitácora (TODO submenú)
-            logbookUi.enter();
-            uiState.setScreen(UiScreen::MENU_LOGBOOK);
-            Serial.println(F("[MENU] Bitacora -> UI"));
-            break;
-
-        case 4: { // Ahorro (deep sleep timeout option 0..2)
+        case 2: { // Ahorro (deep sleep timeout option 0..2)
             settings.ahorroTimeoutOption =
                 (settings.ahorroTimeoutOption + 1) % 4; // agrega OFF (3)
             settingsService.save(settings);
@@ -294,7 +285,7 @@ private:
             break;
         }
 
-        case 5: { // Invertir pantalla
+        case 3: { // Invertir pantalla
             settings.inverPant = !settings.inverPant;
             settingsService.save(settings);
             lcd.setRotation(settings.inverPant);
@@ -303,22 +294,7 @@ private:
             break;
         }
 
-        case 6: // Offset (editor más adelante)
-            uiState.startOffsetEdit(settings.alturaOffset);
-            uiState.setScreen(UiScreen::MENU_OFFSET);
-            Serial.println(F("[MENU] Offset editor"));
-            break;
-
-        case 7: // Fecha y hora (editor más adelante)
-            {
-                UtcDateTime now = rtcDrv.nowUtc();
-                uiState.startDateTimeEdit(now);
-                uiState.setScreen(UiScreen::MENU_DATETIME);
-                Serial.println(F("[MENU] Fecha/hora -> editor"));
-            }
-            break;
-
-        case 8: { // Idioma ES/EN
+        case 4: { // Idioma ES/EN
             if (settings.idioma == Language::ES) {
                 settings.idioma = Language::EN;
             } else {
@@ -329,6 +305,34 @@ private:
                           settings.idioma == Language::ES ? "ES" : "EN");
             break;
         }
+
+        case 5: { // Iconos HUD
+            uiState.setIconMenuIndex(0);
+            uiState.setScreen(UiScreen::MENU_ICONS);
+            Serial.println(F("[MENU] Iconos HUD"));
+            break;
+        }
+
+        case 6: // Bitácora (TODO submenú)
+            logbookUi.enter();
+            uiState.setScreen(UiScreen::MENU_LOGBOOK);
+            Serial.println(F("[MENU] Bit\u00e1cora -> UI"));
+            break;
+
+        case 7: // Offset (editor más adelante)
+            uiState.startOffsetEdit(settings.alturaOffset);
+            uiState.setScreen(UiScreen::MENU_OFFSET);
+            Serial.println(F("[MENU] Offset editor"));
+            break;
+
+        case 8: // Fecha y hora (editor más adelante)
+            {
+                UtcDateTime now = rtcDrv.nowUtc();
+                uiState.startDateTimeEdit(now);
+                uiState.setScreen(UiScreen::MENU_DATETIME);
+                Serial.println(F("[MENU] Fecha/hora -> editor"));
+            }
+            break;
 
         case 9: // Suspender
             uiState.requestSuspend();
@@ -510,6 +514,9 @@ private:
         case 0: settings.hud.showArrows = !settings.hud.showArrows; break;
         case 1: settings.hud.showTime   = !settings.hud.showTime;   break;
         case 2: settings.hud.showTemp   = !settings.hud.showTemp;   break;
+        case 3: settings.hud.showUnits  = !settings.hud.showUnits;  break;
+        case 4: settings.hud.showBorder = !settings.hud.showBorder; break;
+        case 5: settings.hud.showJumps  = !settings.hud.showJumps;  break;
         default: return;
         }
         settingsService.save(settings);

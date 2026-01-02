@@ -44,6 +44,9 @@ public:
                             uint32_t nowMs)
     {
         if (screen != UiScreen::MAIN) {
+            if (lcd) {
+                lcd->setPowerSave(false); // otras pantallas siempre con display activo
+            }
             lastScreen = screen;
             return;
         }

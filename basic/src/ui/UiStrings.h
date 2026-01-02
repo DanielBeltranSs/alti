@@ -8,13 +8,13 @@
 static const char* const UI_MENU_LABELS_ES[UI_MENU_ITEM_COUNT] = {
     "Unidad",
     "Luz",
-    "Iconos",
-    "Bitacora",
     "Ahorro",
     "Invertir",
+    "Idioma",
+    "Iconos",
+    "Bit\u00e1cora",
     "Offset",
     "Fecha/hora",
-    "Idioma",
     "Suspender",
     "Juego",
     "Salir"
@@ -23,13 +23,13 @@ static const char* const UI_MENU_LABELS_ES[UI_MENU_ITEM_COUNT] = {
 static const char* const UI_MENU_LABELS_EN[UI_MENU_ITEM_COUNT] = {
     "Units",
     "Light",
-    "Icons",
-    "Logbook",
     "Sleep",
     "Invert",
+    "Language",
+    "Icons",
+    "Logbook",
     "Offset",
     "Date/Time",
-    "Language",
     "Suspend",
     "Game",
     "Exit"

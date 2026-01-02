@@ -88,7 +88,7 @@ public:
                     idx = 0;
                     toastActive = true;
                     toastUntil  = millis() + 900;
-                    strncpy(toastMsg, (settings.idioma == Language::ES) ? "Bitacora borrada"
+                    strncpy(toastMsg, (settings.idioma == Language::ES) ? "Bit\u00e1cora borrada"
                                                                         : "Logbook erased",
                             sizeof(toastMsg)-1);
                     toastMsg[sizeof(toastMsg)-1] = '\0';
@@ -107,12 +107,12 @@ public:
 
         if (toastActive) {
             u8g2.clearBuffer();
-        u8g2.setFont(UI_FONT_TEXT_SMALL);
-        int w = u8g2.getStrWidth(toastMsg);
-        int x = (128 - w) / 2; if (x < 0) x = 0;
-        u8g2.setCursor(x, 36);
-        u8g2.print(toastMsg);
-        u8g2.sendBuffer();
+            const uint8_t* fontText = chooseFont(settings.idioma);
+            u8g2.setFont(fontText);
+            int w = u8g2.getUTF8Width(toastMsg);
+            int x = (128 - w) / 2; if (x < 0) x = 0;
+            u8g2.drawUTF8(x, 36, toastMsg);
+            u8g2.sendBuffer();
             if ((int32_t)(millis() - toastUntil) >= 0) {
                 toastActive = false;
             }
@@ -153,20 +153,18 @@ private:
 
     static void drawEmpty(U8G2& u8g2, Language lang) {
         u8g2.clearBuffer();
-        u8g2.setFont(UI_FONT_TEXT_SMALL);
-        u8g2.setCursor(8, 28);
-        u8g2.print((lang == Language::ES) ? "Sin registros" : "No entries");
-        u8g2.setCursor(8, 46);
-        u8g2.print((lang == Language::ES) ? "MID para salir" : "MID to exit");
+        u8g2.setFont(chooseFont(lang));
+        u8g2.drawUTF8(8, 28, (lang == Language::ES) ? "Sin registros" : "No entries");
+        u8g2.drawUTF8(8, 46, (lang == Language::ES) ? "MID para salir" : "MID to exit");
         u8g2.sendBuffer();
     }
 
     static void drawErasePrompt(U8G2& u8g2, Language lang) {
         u8g2.clearBuffer();
-        u8g2.setFont(UI_FONT_TEXT_SMALL);
-        u8g2.setCursor(2, 16); u8g2.print((lang == Language::ES) ? "Borrar Bitacora" : "Erase Logbook");
-        u8g2.setCursor(2, 32); u8g2.print((lang == Language::ES) ? "Mantener UP+DOWN 3s" : "Hold UP+DOWN 3s");
-        u8g2.setCursor(2, 48); u8g2.print((lang == Language::ES) ? "Soltar y repetir / MID" : "Release+repeat / MID");
+        u8g2.setFont(chooseFont(lang));
+        u8g2.drawUTF8(2, 16, (lang == Language::ES) ? "Borrar Bit\u00e1cora" : "Erase Logbook");
+        u8g2.drawUTF8(2, 32, (lang == Language::ES) ? "Mantener UP+DOWN 3s" : "Hold UP+DOWN 3s");
+        u8g2.drawUTF8(2, 48, (lang == Language::ES) ? "Soltar y repetir / MID" : "Release+repeat / MID");
         u8g2.sendBuffer();
     }
 
@@ -204,6 +202,10 @@ private:
         return String(buf) + " km/h";
     }
 
+    static const uint8_t* chooseFont(Language lang) {
+        return (lang == Language::EN) ? UI_FONT_TEXT_EN : UI_FONT_TEXT_ES;
+    }
+
     static void drawEntry(U8G2& u8g2,
                           const LogbookService::Record& rec,
                           int idx, int total,
@@ -218,7 +220,7 @@ private:
         u8g2.drawVLine(127, 0, 64);
 
         // Header Jump + hora
-        u8g2.setFont(UI_FONT_TEXT_SMALL);
+        u8g2.setFont(chooseFont(settings.idioma));
         char hhmm[8];
         char dmy[12];
         formatTime(rec.tsUtc, hhmm, sizeof(hhmm), dmy, sizeof(dmy));
@@ -226,8 +228,7 @@ private:
         char hdr[48];
         snprintf(hdr, sizeof(hdr), "Jump: %lu %s %s",
                  (unsigned long)rec.id, hhmm, dmy);
-        u8g2.setCursor(2, 10);
-        u8g2.print(hdr);
+        u8g2.drawUTF8(2, 10, hdr);
 
         String sExit   = fmtAlt(rec.exitAltM,   settings.unidadMetros, 0);
         String sDeploy = fmtAlt(rec.deployAltM, settings.unidadMetros, 0);
@@ -235,20 +236,20 @@ private:
         String sVff    = fmtVel(rec.vmaxFFmps);
         String sVcan   = fmtVel(rec.vmaxCanopymps);
 
-        u8g2.setCursor(2, 22);  u8g2.print((settings.idioma == Language::ES) ? "Exit:" : "Exit:");
-        u8g2.setCursor(34, 22); u8g2.print(sExit);
+        u8g2.drawUTF8(2, 22,  (settings.idioma == Language::ES) ? "Exit:" : "Exit:");
+        u8g2.drawUTF8(34, 22, sExit.c_str());
 
-        u8g2.setCursor(2, 32);  u8g2.print((settings.idioma == Language::ES) ? "Open:" : "Open:");
-        u8g2.setCursor(34, 32); u8g2.print(sDeploy);
+        u8g2.drawUTF8(2, 32,  (settings.idioma == Language::ES) ? "Open:" : "Open:");
+        u8g2.drawUTF8(34, 32, sDeploy.c_str());
 
-        u8g2.setCursor(2, 42);  u8g2.print("FF:");
-        u8g2.setCursor(34, 42); u8g2.print(sFF);
+        u8g2.drawUTF8(2, 42,  "FF:");
+        u8g2.drawUTF8(34, 42, sFF.c_str());
 
-        u8g2.setCursor(2, 52);  u8g2.print("V:");
-        u8g2.setCursor(34, 52); u8g2.print(sVff);
+        u8g2.drawUTF8(2, 52,  "V:");
+        u8g2.drawUTF8(34, 52, sVff.c_str());
 
-        u8g2.setCursor(2, 62);  u8g2.print("Vc:");
-        u8g2.setCursor(34, 62); u8g2.print(sVcan);
+        u8g2.drawUTF8(2, 62,  "Vc:");
+        u8g2.drawUTF8(34, 62, sVcan.c_str());
 
         // Footer: índice
         u8g2.setFont(UI_FONT_TEXT_SMALL);

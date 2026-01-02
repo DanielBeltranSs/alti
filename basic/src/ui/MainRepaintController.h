@@ -22,6 +22,8 @@ public:
         state.lastHudMask  = 0xFF;
         state.haveLastTime = false;
         state.haveLastTemp = false;
+        state.haveLastUnit = false;
+        state.lastUnit     = 0xFF;
         memset(state.lastTimeText, 0, sizeof(state.lastTimeText));
         forceMainRepaint = true;
     }
@@ -41,6 +43,7 @@ public:
         bool chargingVisible = model.charging;   // no removible
         bool timeVisible     = hudCfg.showTime;
         bool tempVisible     = hudCfg.showTemp;
+        bool unitVisible     = hudCfg.showUnits;
 
         if (state.first) {
             repaint = true;
@@ -97,6 +100,13 @@ public:
             }
         }
 
+        if (unitVisible) {
+            if (!state.haveLastUnit ||
+                state.lastUnit != static_cast<uint8_t>(model.unit)) {
+                repaint = true;
+            }
+        }
+
         bool tempFinite = isfinite(model.temperatureC);
         int16_t tempInt = tempFinite ? (int16_t)lroundf(model.temperatureC) : 0;
         if (tempVisible) {
@@ -118,6 +128,8 @@ public:
             state.lastFreefall = ffVisible;
             state.lastMinute   = timeVisible ? minute : state.lastMinute;
             state.lastHudMask  = hudMask;
+            state.lastUnit     = unitVisible ? static_cast<uint8_t>(model.unit) : state.lastUnit;
+            state.haveLastUnit = unitVisible || state.haveLastUnit;
 
             if (timeVisible) {
                 state.haveLastTime = true;
@@ -152,6 +164,8 @@ private:
         bool     lastFreefall = false;
         uint16_t lastMinute   = 0xFFFF;
         uint8_t  lastHudMask  = 0xFF;
+        uint8_t  lastUnit     = 0xFF;
+        bool     haveLastUnit = false;
 
         bool     haveLastTime = false;
         char     lastTimeText[6] = {0};

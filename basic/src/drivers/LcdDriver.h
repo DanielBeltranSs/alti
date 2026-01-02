@@ -10,6 +10,7 @@ public:
     bool begin() {
         // Inicializar u8g2
         u8g2.begin();
+        u8g2.enableUTF8Print();
 
         u8g2.setContrast(140);   // prueba: 140–200 suele ir bien en ST7567
         // Orientación por defecto (no invertida)
@@ -39,6 +40,15 @@ public:
         return backlightLevel;
     }
 
+    // Activa o desactiva el modo power-save del LCD (memoria se mantiene).
+    void setPowerSave(bool enable) {
+        if (enable == powerSave) return;
+        powerSave = enable;
+        u8g2.setPowerSave(enable ? 1 : 0);
+    }
+
+    bool isPowerSave() const { return powerSave; }
+
     // Aplica rotación 0° (false) o 180° (true)
     void setRotation(bool inverted) {
         rotationInverted = inverted;
@@ -59,7 +69,7 @@ public:
         setBacklight(0);
 
         // Poner el display en power save y limpiar cualquier contenido
-        u8g2.setPowerSave(true);
+        setPowerSave(true);
         u8g2.clearBuffer();
         u8g2.sendBuffer();
     }
@@ -77,4 +87,5 @@ private:
 
     uint8_t backlightLevel = 0;
     bool    rotationInverted = false;
+    bool    powerSave = false;
 };

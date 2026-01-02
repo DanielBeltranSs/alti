@@ -11,12 +11,18 @@ struct HudConfig {
     bool showArrows = true;
     bool showTime   = true;
     bool showTemp   = true;
+    bool showUnits  = true;
+    bool showBorder = true;
+    bool showJumps  = true;
 
     uint8_t toMask() const {
         uint8_t m = 0;
         if (showArrows) m |= 1 << 0;
         if (showTime)   m |= 1 << 1;
         if (showTemp)   m |= 1 << 2;
+        if (showUnits)  m |= 1 << 3;
+        if (showBorder) m |= 1 << 4;
+        if (showJumps)  m |= 1 << 5;
         return m;
     }
 
@@ -25,6 +31,9 @@ struct HudConfig {
         c.showArrows = (mask & (1 << 0)) != 0;
         c.showTime   = (mask & (1 << 1)) != 0;
         c.showTemp   = (mask & (1 << 2)) != 0;
+        c.showUnits  = (mask & (1 << 3)) != 0;
+        c.showBorder = (mask & (1 << 4)) != 0;
+        c.showJumps  = (mask & (1 << 5)) != 0;
         return c;
     }
 };

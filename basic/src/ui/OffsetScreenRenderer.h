@@ -17,7 +17,8 @@ public:
         U8G2& u8g2 = lcd->getU8g2();
         u8g2.clearBuffer();
 
-        u8g2.setFont(UI_FONT_TEXT_SMALL);
+        const uint8_t* fontText = (lang == Language::EN) ? UI_FONT_TEXT_EN : UI_FONT_TEXT_ES;
+        u8g2.setFont(fontText);
 
         const char* title = (lang == Language::EN) ? "Offset" : "Offset";
         u8g2.drawStr(2, 10, title);

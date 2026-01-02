@@ -52,7 +52,7 @@ public:
 
         // Constantes de política (tuneables)
         const uint32_t NO_SLEEP_GRACE_MS     = 5000;                // ms tras interacción
-        const uint32_t LIGHT_SLEEP_GROUND_MS = 60000;               // light sleep \"grande\" en suelo
+        const uint32_t LIGHT_SLEEP_GROUND_MS = 90000;               // light sleep \"grande\" en suelo
         const uint32_t LIGHT_SLEEP_FLIGHT_MS = 20;                  // light sleep corto en vuelo
         const uint32_t ZZZ_HINT_BEFORE_MS    = 5UL * 60UL * 1000UL; // 5 minutos
         const float    LOW_BATT_VOLTAGE      = 3.36f;

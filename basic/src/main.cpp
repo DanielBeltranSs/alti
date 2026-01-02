@@ -40,7 +40,8 @@ UiInputController  gUiInputController(gUiStateService,
                                       gAltimetryService,
                                       gLcdDriver,
                                       gLogbookUi,
-                                      gRtcDriver);
+                                      gRtcDriver,
+                                      gFlightPhaseService);
 
 // Configura AppContext para apuntar a las instancias globales.
 void setupContext() {
@@ -182,6 +183,11 @@ void loop() {
     model.charging       = gBatteryMonitor.isChargerConnected();
     model.showZzz        = dec.showZzzHint;  // viene de SleepPolicy
     model.temperatureC   = alt.temperatureC;
+    model.unit           = gSettings.unidadMetros;
+    LogbookService::Stats lbStats{};
+    if (gLogbook.getStats(lbStats)) {
+        model.totalJumps = lbStats.totalIds;
+    }
 
     // Hora desde el RTC en formato "HH:MM"
     UtcDateTime nowUtc = gRtcDriver.nowUtc();
@@ -223,6 +229,16 @@ void loop() {
             gGame.start(now);
         }
         gGame.update(now);
+    }
+
+    // Auto-cerrar menús (root y icons) tras 6s de inactividad
+    if (screen == UiScreen::MENU_ROOT || screen == UiScreen::MENU_ICONS) {
+        uint32_t lastInt = gUiStateService.getLastInteractionMs();
+        if (now - lastInt >= 6000) {
+            gUiStateService.setScreen(UiScreen::MAIN);
+            gUiRenderer.notifyMainInteraction();
+            screen = UiScreen::MAIN;
+        }
     }
 
 

@@ -15,4 +15,6 @@ struct MainUiModel {
     bool showZzz           = false;
     char         timeText[6];   // "HH:MM"
     float        temperatureC = NAN;
+    UnitType     unit = UnitType::METERS;
+    uint32_t     totalJumps    = 0;
 };
