@@ -22,6 +22,19 @@ public:
 
         u8g2.clearBuffer();
 
+        // Si modo minimal para CLIMB/FF está activo, dibuja sólo la altura
+        // (ajusta fuente/posición en config_ui.h para probar centrado).
+        if (model.minimalFlight) {
+            String altStr = formatAltitudeString(model.alt.altToShow, model.freefall);
+            u8g2.setFont(UI_FONT_ALT_CLEAR);
+            uint16_t altWidth = u8g2.getStrWidth(altStr.c_str());
+            uint16_t altX     = ((128 - altWidth) / 2);
+            uint16_t altY     = UI_CLEAR_ALT_Y; // baseline configurable
+            u8g2.drawStr(altX, altY, altStr.c_str());
+            u8g2.sendBuffer();
+            return;
+        }
+
         // 1) Línea superior: unidad + temperatura + hora + (icono de carga) + batería
         u8g2.setFont(UI_FONT_TEXT_SMALL);
 
@@ -86,7 +99,7 @@ public:
         u8g2.setFont(UI_FONT_ALT_MAIN);
         uint16_t altWidth = u8g2.getStrWidth(altStr.c_str());
         uint16_t altX     = ((128 - altWidth) / 2);
-        uint16_t altY     = 48;
+        uint16_t altY     = 48; // baseline altura principal; ajusta si cambias de fuente
 
         u8g2.drawStr(altX, altY, altStr.c_str());
 
@@ -107,6 +120,13 @@ public:
         if (model.freefall && hudCfg.showArrows) {
             uint8_t x0 = 96;
             u8g2.drawTriangle(x0, yStatus-2, x0+6, yStatus+8, x0+12, yStatus-2);
+        }
+
+        if (model.canopy && hudCfg.showArrows) {
+            // Cuadrado simple para indicar canopy en la misma banda de iconos
+            uint8_t x0 = 92;
+            uint8_t size = 12;
+            u8g2.drawBox(x0, yStatus-8, size, size);
         }
 
         if (model.showZzz) {
@@ -136,13 +156,6 @@ public:
             snprintf(tempBuf, sizeof(tempBuf), "%d%cC", tInt, 176);
             u8g2.drawStr(2, 62, tempBuf);
         }
-
-        // Contador de repaints (debug) — desactivado en pantalla final
-        // u8g2.setFont(u8g2_font_micro_tr);
-        // char rbuf[16];
-        // snprintf(rbuf, sizeof(rbuf), "R:%lu",
-        //          static_cast<unsigned long>(repaintCounter));
-        // u8g2.drawStr(1, 63, rbuf);
 
         // Marco opcional alrededor de la pantalla
         if (hudCfg.showBorder) {

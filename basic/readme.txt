@@ -100,3 +100,19 @@ alturaOffset
 idioma
 inverPant
 usrActual
+
+el altimetro base tendrá dos versiones una con y una sin bluetooth, corresponderá a una tipica limitacion de software y no de hardware por lo que deberemos poder desactivar el bl con alguna flag
+
+# bluetooth (borrador)
+- BLE debe poder apagarse totalmente desde el menú para no gastar batería: cuando está Off no se inicializa el stack ni se hace advertising.
+- Identidad única por dispositivo: nombre derivado del MAC (ej. `ALTI-XXXX`) y/o PIN almacenado en NVS, visible en etiqueta/QR para emparejarse con la app móvil correcta.
+- Seguridad: exigir pairing o un desafío/PIN antes de permitir lecturas/escrituras (logbook, ajustes).
+- Advertising lento y de baja potencia; opcionalmente sólo on-demand. Tras desconexión, se puede apagar si no hay actividad.
+- Servicio GATT propio con UUID base: control de comandos, lectura de bitácora en bloques, estado básico y ajustes. Documentar el protocolo en un contrato compartido con la app (repo separado).
+
+# ota por bluetooth (borrador)
+- Binario actual ~500 kB. Con BLE típico (~10–30 kB/s), estimar 20–60 s de transferencia + verificación.
+- Usar particiones OTA existentes: recibir en la partición inactiva, validar hash/versión y hacer switch seguro.
+- Requiere autenticación previa (pairing/PIN) y verificación de imagen (hash/firma) antes de aplicar para evitar cargas no autorizadas o corruptas.
+- Durante la actualización, deshabilitar sleeps que interrumpan la transferencia; reactivar política de energía al terminar.
+- La app móvil debe manejar reconexiones y reintentos, mostrar progreso y no dejar imágenes a medias.

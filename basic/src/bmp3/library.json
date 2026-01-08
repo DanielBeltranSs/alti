@@ -1,0 +1,13 @@
+{
+  "name": "BMP3_SensorAPI",
+  "version": "local",
+  "build": {
+    "srcFilter": [
+      "+<*.c>",
+      "-<examples/>",
+      "-<self-test/>",
+      "-<*/examples/>",
+      "-<*/self-test/>"
+    ]
+  }
+}

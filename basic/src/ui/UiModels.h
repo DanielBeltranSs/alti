@@ -11,10 +11,12 @@ struct MainUiModel {
     bool lockActive        = false;
     bool climbing          = false;
     bool freefall          = false;
+    bool canopy            = false;
     bool charging          = false;
     bool showZzz           = false;
     char         timeText[6];   // "HH:MM"
     float        temperatureC = NAN;
     UnitType     unit = UnitType::METERS;
     uint32_t     totalJumps    = 0;
+    bool         minimalFlight = false; // HUD limpio en CLIMB/FF
 };

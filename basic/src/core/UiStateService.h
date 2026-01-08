@@ -13,6 +13,8 @@ public:
         lastInteractionMs       = millis();
         locked                  = false;
         lockGroundStableStartMs = 0;
+        lockStartMs             = 0;
+        leftGroundSinceLock     = false;
         menuIndex               = 0;
         offsetEditValue         = 0.0f;
         suspendRequested        = false;
@@ -31,10 +33,16 @@ public:
 
     bool isLocked() const { return locked; }
     void setLocked(bool v) {
-        locked = v;
-        if (!locked) {
-            // Si se desbloquea manualmente, reseteamos el contador de suelo estable
-            lockGroundStableStartMs = 0;
+        if (v) {
+            locked                 = true;
+            lockStartMs            = millis();
+            lockGroundStableStartMs= 0;
+            leftGroundSinceLock    = false;
+        } else {
+            locked                 = false;
+            lockGroundStableStartMs= 0;
+            leftGroundSinceLock    = false;
+            lockStartMs            = 0;
         }
     }
 
@@ -60,28 +68,47 @@ public:
             return;
         }
 
-        // Para contar, necesitamos estar en suelo y con "suelo estable" reportado por Altimetry
+        // Marcar si salimos del suelo mientras estaba el lock activo
+        if (!onGround) {
+            leftGroundSinceLock = true;
+            lockGroundStableStartMs = 0;
+        }
+
+        // Sólo contamos estabilidad en suelo
         if (!onGround || !groundStable) {
             lockGroundStableStartMs = 0;
             return;
         }
 
-        // Primera vez que entramos en la condición de suelo estable con lock
+        // Primera vez que entramos en condición de suelo estable con lock
         if (lockGroundStableStartMs == 0) {
             lockGroundStableStartMs = nowMs;
             return;
         }
 
-        constexpr uint32_t LOCK_RELEASE_MS = 60UL * 1000UL; // 1 minuto
+        uint32_t elapsedStable = nowMs - lockGroundStableStartMs;
+        uint32_t elapsedSinceLock = (lockStartMs != 0) ? (nowMs - lockStartMs) : 0;
 
-        uint32_t elapsed = (nowMs >= lockGroundStableStartMs)
-                               ? (nowMs - lockGroundStableStartMs)
-                               : 0;
+        // Reglas:
+        // 1) Post-salto: si salimos de GROUND alguna vez, auto-unlock tras 60s de suelo estable.
+        // 2) Embarque: si nunca salimos de suelo, auto-unlock sólo si pasa una espera larga (p.ej. vuelo cancelado).
+        constexpr uint32_t LOCK_RELEASE_POST_FLIGHT_MS = 60UL * 1000UL;
+        constexpr uint32_t LOCK_RELEASE_BOARDING_MS    = 10UL * 60UL * 2000UL; // 10 minutos de espera
 
-        if (elapsed >= LOCK_RELEASE_MS) {
-            // Auto-unlock: se cumple 1 minuto en suelo estable -> quitamos lock
+        bool canReleasePostFlight =
+            leftGroundSinceLock &&
+            (elapsedStable >= LOCK_RELEASE_POST_FLIGHT_MS);
+
+        bool canReleaseBoarding =
+            !leftGroundSinceLock &&
+            (elapsedSinceLock >= LOCK_RELEASE_BOARDING_MS) &&
+            (elapsedStable   >= LOCK_RELEASE_POST_FLIGHT_MS); // también pedimos 1 min estable
+
+        if (canReleasePostFlight || canReleaseBoarding) {
             locked = false;
             lockGroundStableStartMs = 0;
+            leftGroundSinceLock = false;
+            lockStartMs = 0;
         }
     }
 
@@ -212,6 +239,8 @@ private:
 
     // Desde cuándo llevamos suelo estable con el lock activo
     uint32_t  lockGroundStableStartMs = 0;
+    uint32_t  lockStartMs             = 0;
+    bool      leftGroundSinceLock     = false;
 
     // Índice de selección de menú (root o el que toque)
     uint8_t   menuIndex         = 0;

@@ -1,0 +1,3 @@
+[submodule "basic/alti-protocol"]
+	path = basic/alti-protocol
+	url = https://github.com/DanielBeltranSs/alti-protocol.git

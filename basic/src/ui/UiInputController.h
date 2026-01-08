@@ -225,12 +225,13 @@ private:
         // 3: Invertir
         // 4: Idioma
         // 5: Iconos HUD
-        // 6: Bitácora
-        // 7: Offset
-        // 8: Fecha y hora
-        // 9: Suspender (deep sleep manual)
-        // 10: Juego (demo)
-        // 11: Salir
+        // 6: Pantalla limpia vuelo/FF
+        // 7: Bitácora
+        // 8: Offset
+        // 9: Fecha y hora
+        // 10: Suspender (deep sleep manual)
+        // 11: Juego (demo)
+        // 12: Salir
 
         switch (idx) {
         case 0: { // Unidad m/ft
@@ -313,19 +314,27 @@ private:
             break;
         }
 
-        case 6: // Bitácora (TODO submenú)
+        case 6: { // Pantalla limpia en vuelo/FF
+            settings.hudMinimalFlight = !settings.hudMinimalFlight;
+            settingsService.save(settings);
+            Serial.printf("[MENU] HUD limpio vuelo -> %s\n",
+                          settings.hudMinimalFlight ? "ON" : "OFF");
+            break;
+        }
+
+        case 7: // Bitácora (TODO submenú)
             logbookUi.enter();
             uiState.setScreen(UiScreen::MENU_LOGBOOK);
             Serial.println(F("[MENU] Bit\u00e1cora -> UI"));
             break;
 
-        case 7: // Offset (editor más adelante)
+        case 8: // Offset (editor más adelante)
             uiState.startOffsetEdit(settings.alturaOffset);
             uiState.setScreen(UiScreen::MENU_OFFSET);
             Serial.println(F("[MENU] Offset editor"));
             break;
 
-        case 8: // Fecha y hora (editor más adelante)
+        case 9: // Fecha y hora (editor más adelante)
             {
                 UtcDateTime now = rtcDrv.nowUtc();
                 uiState.startDateTimeEdit(now);
@@ -334,18 +343,18 @@ private:
             }
             break;
 
-        case 9: // Suspender
+        case 10: // Suspender
             uiState.requestSuspend();
             uiState.setScreen(UiScreen::MAIN); // volvemos a MAIN para permitir sleep
             Serial.println(F("[MENU] Suspender -> solicitar deep sleep"));
             break;
 
-        case 10: // Juego
+        case 11: // Juego
             uiState.setScreen(UiScreen::GAME);
             Serial.println(F("[MENU] Juego -> DEMO"));
             break;
 
-        case 11: // Salir del menú
+        case 12: // Salir del menú
             uiState.setScreen(UiScreen::MAIN);
             Serial.println(F("[MENU] Salir -> MAIN"));
             break;

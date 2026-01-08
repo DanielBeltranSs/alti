@@ -58,17 +58,19 @@ public:
         constexpr float VS_FREEFALL_M         = -13.0f; // caída fuerte (≈ -42 ft/s)
         constexpr float STRONG_FALL_M         = -20.0f; // "freefall serio" para habilitar canopy
 
-        constexpr float VS_CANOPY_FLOOR_M     = -9.0f;  // por encima de esto solemos estar bajo campana
+        // Piso amplio para canopy (admite velas cargadas/swoop)
+        constexpr float VS_CANOPY_FLOOR_M     = -12.0f;
         constexpr float VS_GROUND_MAX_M       = 0.5f;   // "casi quieto" en suelo
         constexpr float GROUND_ALT_BAND_M     = 2.0f;   // ±2 m alrededor del suelo
         constexpr float CLIMB_ABORT_ALT_M     = 150.0f; // si sube poco y se queda quieto, abortar CLIMB
+        constexpr float ALT_LOSS_CANOPY_MIN_M = 180.0f; // pérdida mínima desde exit para permitir canopy (~600 ft)
 
         // --- Tiempos de persistencia ---
         constexpr uint32_t CLIMB_PERSIST_MS       = 3000; // CLIMB sostenido
         constexpr uint32_t FREEFALL_CONFIRM_MS    = 400;  // vs fuerte sostenida
-        constexpr uint32_t CANOPY_CONFIRM_MS      = 800;  // patrón canopy sostenido
+        constexpr uint32_t CANOPY_CONFIRM_MS      = 1500; // patrón canopy sostenido (más robusto)
         constexpr uint32_t GROUND_PERSIST_MS      = 2000; // quietud para volver a suelo
-        constexpr uint32_t MIN_FREEFALL_MS        = 1500; // al menos 1.5s en FF antes de canopy
+        constexpr uint32_t MIN_FREEFALL_MS        = 2500; // al menos 2.5s en FF antes de canopy
         constexpr uint32_t MIN_CANOPY_MS_FOR_LAND = 3000; // tiempo mínimo en canopy antes de suelo opcional
         constexpr uint32_t CLIMB_ABORT_STABLE_MS  = 30000; // 30s quieto en altitud baja -> abortar CLIMB
 
@@ -82,6 +84,7 @@ public:
         float vsGroundMax     = (unit == UnitType::METERS) ? VS_GROUND_MAX_M       : VS_GROUND_MAX_M       * M_TO_FT;
         float groundAltBand   = (unit == UnitType::METERS) ? GROUND_ALT_BAND_M     : GROUND_ALT_BAND_M     * M_TO_FT;
         float climbAbortAlt   = (unit == UnitType::METERS) ? CLIMB_ABORT_ALT_M     : CLIMB_ABORT_ALT_M     * M_TO_FT;
+        float canopyAltLoss   = (unit == UnitType::METERS) ? ALT_LOSS_CANOPY_MIN_M : ALT_LOSS_CANOPY_MIN_M * M_TO_FT;
 
         float altAboveGround  = alt.rawAlt - groundRefAlt;
         float vs              = alt.verticalSpeed;
@@ -211,15 +214,18 @@ public:
             //  - Llevamos al menos MIN_FREEFALL_MS en FF.
             //  - VS se reduce claramente: |vs| menor que la mitad del máximo de FF
             //    y además por encima del piso de canopy (vsCanopyFloor, es decir, descenso mucho más lento).
+            //  - Pérdida de altura acumulada desde la salida superior al mínimo definido.
             float absMaxDownVs = fabsf(maxDownVs); // maxDownVs es negativo
             float absVs        = fabsf(vs);
+            float altLoss      = freefallStartAlt - alt.rawAlt; // en unidad actual
 
             bool canCheckCanopy = (hasSeenStrongFall &&
                                    absMaxDownVs > 0.1f && // evita divisiones raras
-                                   timeInFF >= MIN_FREEFALL_MS);
+                                   timeInFF >= MIN_FREEFALL_MS &&
+                                   altLoss >= canopyAltLoss);
 
             if (canCheckCanopy) {
-                bool vsMuchSlower = (absVs < 0.5f * absMaxDownVs) && (vs > vsCanopyFloor);
+                bool vsMuchSlower = (absVs < 0.4f * absMaxDownVs) && (vs > vsCanopyFloor);
                 if (vsMuchSlower) {
                     if (canopyCandidateStartMs == 0) {
                         canopyCandidateStartMs = nowMs;

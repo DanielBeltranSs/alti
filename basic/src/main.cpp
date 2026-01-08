@@ -143,6 +143,7 @@ void loop() {
     }
 
     // 2) Altimetría y fase de vuelo
+    gAltimetryService.setLockActive(gUiStateService.isLocked());
     gAltimetryService.update(now);
     AltitudeData alt = gAltimetryService.getAltitudeData();
 
@@ -180,6 +181,9 @@ void loop() {
     model.lockActive     = gUiStateService.isLocked();
     model.climbing       = (phase == FlightPhase::CLIMB) && !alt.isGroundStable;
     model.freefall       = (phase == FlightPhase::FREEFALL);
+    model.canopy         = (phase == FlightPhase::CANOPY);
+    model.minimalFlight  = gSettings.hudMinimalFlight &&
+                           (phase == FlightPhase::CLIMB || phase == FlightPhase::FREEFALL);
     model.charging       = gBatteryMonitor.isChargerConnected();
     model.showZzz        = dec.showZzzHint;  // viene de SleepPolicy
     model.temperatureC   = alt.temperatureC;

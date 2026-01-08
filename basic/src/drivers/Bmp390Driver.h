@@ -139,12 +139,13 @@ public:
             break;
 
         case SensorMode::PRECISO:
-            // Modo “ultra preciso”: compromiso entre ruido y respuesta
-            settings.odr_filter.press_os   = BMP3_OVERSAMPLING_4X;
-            settings.odr_filter.temp_os    = BMP3_OVERSAMPLING_2X;
+            // Modo “ultra preciso”: oversampling alto + filtro medio
+            settings.odr_filter.press_os   = BMP3_OVERSAMPLING_16X;
+            settings.odr_filter.temp_os    = BMP3_OVERSAMPLING_16X;
             settings.odr_filter.iir_filter = BMP3_IIR_FILTER_COEFF_7;
             settings.odr_filter.odr        = BMP3_ODR_50_HZ;
             Wire.setClock(400000); // 400 kHz
+            Serial.println(F("BMP: Modo Ultra Preciso (CLIMB/CANOPY)"));
             break;
 
         case SensorMode::FREEFALL:

@@ -47,6 +47,7 @@ struct Settings {
     bool       inverPant           = false; // true = invertir pantalla
     uint8_t    usrActual           = 0;     // reservado multi-usuario
     HudConfig  hud;                        // configuración de iconos de pantalla principal
+    bool       hudMinimalFlight    = false; // pantalla limpia en CLIMB/FF
 };
 
 class SettingsService {
@@ -105,6 +106,9 @@ Serial.println(s.alturaOffset);
         uint8_t hudMask = prefs.getUChar("hudmask", HudConfig{}.toMask()); // default: ON
         s.hud = HudConfig::fromMask(hudMask);
 
+        // Pantalla limpia en vuelo/FF (off por defecto)
+        s.hudMinimalFlight = prefs.getBool("minhud", false);
+
         return s;
     }
 
@@ -118,6 +122,7 @@ Serial.println(s.alturaOffset);
         prefs.putBool("invert",  s.inverPant);
         prefs.putUChar("user",   s.usrActual);
         prefs.putUChar("hudmask", s.hud.toMask());
+        prefs.putBool("minhud",  s.hudMinimalFlight);
     }
 
 private:

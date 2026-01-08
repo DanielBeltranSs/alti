@@ -29,6 +29,19 @@ constexpr float   GZ_DRIFT_STEP_M          = 0.5f;      // ajuste máximo por it
 constexpr float   GZ_DRIFT_MAX_ABS_M       = 50.0f;     // límite absoluto de drift acumulado
 constexpr uint32_t GZ_DRIFT_INTERVAL_MS    = 2000;      // intervalo mínimo entre ajustes
 
+// Movimiento / traslado seguro (auto ground-zero robusto)
+constexpr float   STATIONARY_VS_THRESH_MPS   = 0.3f;     // VS baja para considerar quietud
+constexpr uint32_t STATIONARY_MIN_MS         = 2000;     // ms en quietud para "stationary"
+constexpr float   FAR_FROM_ZERO_M            = 30.0f;    // distancia al cero que arma airborne
+constexpr uint32_t FAR_FROM_ZERO_MIN_MS      = 5000;     // tiempo lejos del cero para armar
+constexpr float   MOVING_VS_HIGH_MPS         = 2.0f;     // VS típica de avión subiendo
+constexpr float   MOVING_PEAK_ALT_GAIN_M     = 200.0f;   // ganancia clara de avión
+constexpr uint32_t MOVING_HIGH_VS_TIME_MS    = 10000;    // tiempo de VS alta para avión
+constexpr uint32_t MOVEMENT_END_STATIONARY_MS= 30000;    // quietud para cerrar sesión de movimiento
+constexpr uint32_t AIRBORNE_CLEAR_MS         = 60000;    // suelo estable para limpiar latch
+constexpr uint32_t RELOCATION_STABLE_MS      = 120000;   // quietud prolongada antes de re-cero por traslado
+constexpr float   RELOCATION_MIN_DELTA_M     = 10.0f;    // diferencia mínima para re-cero por traslado
+
 //---------------------------------------------
 // Servicio de Altimetría
 //---------------------------------------------
@@ -61,7 +74,24 @@ public:
         didInitialGroundZero = false;
         driftAccumMeters     = 0.0f;
         lastDriftAdjustMs    = 0;
+        stationarySinceMs    = 0;
+        farFromZeroSinceMs   = 0;
+        airborneArmed        = false;
+        vsHighAccumMs        = 0;
+        movementActive       = false;
+        movementStartMs      = 0;
+        moveStartAltMeters   = 0.0f;
+        peakAltGainMeters    = 0.0f;
+        peakVsUp             = 0.0f;
+        timeVsHighMs         = 0;
+        lastVehicleStopMs    = 0;
+        movementLastSampleMs = 0;
+        relocationDone       = false;
+        lockActive           = false;
     }
+
+    // Permite deshabilitar recalibraciones automáticas mientras el lock está activo.
+    void setLockActive(bool locked) { lockActive = locked; }
 
     // Llamar cada loop(), pasando millis().
     void update(uint32_t nowMs) {
@@ -103,13 +133,20 @@ public:
         float verticalSpeedMps = 0.0f;
         if (lastUpdateMs != 0) {
             float dt = (nowMs - lastUpdateMs) / 1000.0f;
+            // Solo consumimos el delta si el dt es suficientemente grande.
             if (dt > MIN_VS_DT_SECONDS) {
                 verticalSpeedMps = (filteredAltMeters - lastFilteredAlt) / dt;
+                lastFilteredAlt  = filteredAltMeters;
+                lastUpdateMs     = nowMs;
             }
+            // Si el dt es demasiado pequeño, no actualizamos lastFilteredAlt/lastUpdateMs
+            // para no “gastar” el delta y perder la velocidad.
+        } else {
+            // Primera lectura: inicializar referencias
+            lastFilteredAlt = filteredAltMeters;
+            lastUpdateMs    = nowMs;
         }
-        lastAltMeters    = currentAltMeters;
-        lastFilteredAlt  = filteredAltMeters;
-        lastUpdateMs  = nowMs;
+        lastAltMeters   = currentAltMeters;
 
         // 5) Unidad y offset (desde Settings, si existen)
         UnitType unit       = UnitType::METERS;
@@ -131,6 +168,14 @@ public:
         bool nearGround = fabsf(relToGroundMeters) < GROUND_ALT_THRESH_METERS;
         bool lowVS      = fabsf(verticalSpeedMps)  < GROUND_VS_THRESH_MPS;
 
+        // Quietud genérica (no necesariamente cerca de cero)
+        bool isStationary = (fabsf(verticalSpeedMps) < STATIONARY_VS_THRESH_MPS);
+        if (isStationary) {
+            if (stationarySinceMs == 0) stationarySinceMs = nowMs;
+        } else {
+            stationarySinceMs = 0;
+        }
+
         if (nearGround && lowVS) {
             if (groundStableSinceMs == 0) {
                 groundStableSinceMs = nowMs;
@@ -139,6 +184,26 @@ public:
         } else {
             groundStableSinceMs = 0;
             isGroundStableFlag  = false;
+        }
+
+        // Latch de “airborne” si estamos lejos del cero o con VS alta durante tiempo.
+        bool farFromZero = fabsf(relToGroundMeters) > FAR_FROM_ZERO_M;
+        if (farFromZero) {
+            if (farFromZeroSinceMs == 0) farFromZeroSinceMs = nowMs;
+            else if ((nowMs - farFromZeroSinceMs) >= FAR_FROM_ZERO_MIN_MS) {
+                airborneArmed = true;
+            }
+        } else {
+            farFromZeroSinceMs = 0;
+        }
+
+        if (verticalSpeedMps > MOVING_VS_HIGH_MPS) {
+            vsHighAccumMs += (lastUpdateMs != 0) ? (nowMs - lastUpdateMs) : 0;
+            if (vsHighAccumMs >= MOVING_HIGH_VS_TIME_MS) {
+                airborneArmed = true;
+            }
+        } else {
+            vsHighAccumMs = 0;
         }
 
         // 8) **Recalibración automática una sola vez** cuando hay suelo estable.
@@ -185,6 +250,80 @@ public:
         } else {
             // Si salimos de suelo estable, reiniciamos temporizador de drift (no el acumulado)
             lastDriftAdjustMs = 0;
+        }
+
+        // Gestión de movimiento (sesiones para clasificar avión vs vehículo).
+        bool longStationary = (stationarySinceMs != 0) &&
+                              ((nowMs - stationarySinceMs) >= MOVEMENT_END_STATIONARY_MS);
+
+        if (!movementActive && !isStationary) {
+            movementActive     = true;
+            movementStartMs    = nowMs;
+            moveStartAltMeters = filteredAltMeters;
+            peakAltGainMeters  = 0.0f;
+            peakVsUp           = verticalSpeedMps;
+            timeVsHighMs       = 0;
+            movementLastSampleMs = nowMs;
+            relocationDone     = false; // permitir nuevo re-cero tras este traslado
+        }
+
+        if (movementActive) {
+            float gain = filteredAltMeters - moveStartAltMeters;
+            if (gain > peakAltGainMeters) peakAltGainMeters = gain;
+            if (verticalSpeedMps > peakVsUp) peakVsUp = verticalSpeedMps;
+
+            if (verticalSpeedMps > MOVING_VS_HIGH_MPS && movementLastSampleMs != 0) {
+                timeVsHighMs += (nowMs - movementLastSampleMs);
+            }
+
+            if (longStationary) {
+                movementActive = false;
+                movementStartMs = 0;
+                movementLastSampleMs = nowMs;
+
+                bool aircraftLikely =
+                    (peakVsUp > 3.0f) ||
+                    (timeVsHighMs >= MOVING_HIGH_VS_TIME_MS) ||
+                    (peakAltGainMeters > MOVING_PEAK_ALT_GAIN_M);
+
+                if (aircraftLikely) {
+                    airborneArmed = true;
+                } else {
+                    lastVehicleStopMs = nowMs;
+                }
+            } else {
+                movementLastSampleMs = nowMs;
+            }
+        }
+
+        // Desarmar latch airborne sólo tras suelo estable prolongado y sin lock.
+        if (airborneArmed &&
+            isGroundStableFlag &&
+            !lockActive &&
+            (nowMs - groundStableSinceMs) >= AIRBORNE_CLEAR_MS) {
+            airborneArmed = false;
+        }
+
+        // Auto re-cero por traslado: sólo si no estamos armados, sin lock, quietos mucho tiempo
+        // y lejos del cero actual.
+        bool relocationEligible =
+            !airborneArmed &&
+            !lockActive &&
+            (stationarySinceMs != 0) &&
+            ((nowMs - stationarySinceMs) >= RELOCATION_STABLE_MS) &&
+            (fabsf(relToGroundMeters) > RELOCATION_MIN_DELTA_M) &&
+            !relocationDone;
+
+        if (relocationEligible) {
+            refPressurePa        = computeRefPressure(pressurePa, offsetMeters);
+            currentAltMeters     = offsetMeters;
+            filteredAltMeters    = offsetMeters;
+            lastAltMeters        = currentAltMeters;
+            lastFilteredAlt      = filteredAltMeters;
+            driftAccumMeters     = 0.0f;
+            lastDriftAdjustMs    = nowMs;
+            didInitialGroundZero = true;
+            relocationDone       = true;
         }
 
         // 9) Proyección a unidad del usuario y aplicación de offset
@@ -273,6 +412,10 @@ private:
 
     uint32_t groundStableSinceMs  = 0;
     bool     isGroundStableFlag   = false;
+    uint32_t stationarySinceMs    = 0;
+    uint32_t farFromZeroSinceMs   = 0;
+    uint32_t vsHighAccumMs        = 0;
+    bool     airborneArmed        = false;
 
     // Nuevo: bandera para hacer la recalibración inicial sólo una vez
     bool     didInitialGroundZero = false;
@@ -280,4 +423,18 @@ private:
     // Auto ground-zero en suelo estable
     float    driftAccumMeters     = 0.0f;
     uint32_t lastDriftAdjustMs    = 0;
+
+    // Movimiento / traslado
+    bool     movementActive       = false;
+    uint32_t movementStartMs      = 0;
+    uint32_t movementLastSampleMs = 0;
+    float    moveStartAltMeters   = 0.0f;
+    float    peakAltGainMeters    = 0.0f;
+    float    peakVsUp             = 0.0f;
+    uint32_t timeVsHighMs         = 0;
+    uint32_t lastVehicleStopMs    = 0;
+    bool     relocationDone       = false;
+
+    // Guardas
+    bool     lockActive           = false;
 };

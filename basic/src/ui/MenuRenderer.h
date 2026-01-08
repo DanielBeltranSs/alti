@@ -153,6 +153,8 @@ private:
             return settings.inverPant ? " On" : " Off";
         case 4: // Idioma
             return (settings.idioma == Language::ES) ? " ES" : " EN";
+        case 6: // Pantalla limpia
+            return settings.hudMinimalFlight ? " On" : " Off";
         default:
             return "";
         }
