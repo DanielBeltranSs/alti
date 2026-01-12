@@ -1,7 +1,11 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
+#include <esp_system.h>
+#include <esp_mac.h>
+#include <string.h>
 #include "util/Types.h"
+#include "include/config_ble.h"
 
 // Servicio de configuración persistente sobre NVS.
 // Guarda: unidades, brillo, tiempo de ahorro, offset, idioma, invert, usuario.
@@ -48,6 +52,9 @@ struct Settings {
     uint8_t    usrActual           = 0;     // reservado multi-usuario
     HudConfig  hud;                        // configuración de iconos de pantalla principal
     bool       hudMinimalFlight    = false; // pantalla limpia en CLIMB/FF
+    bool       bleEnabled          = false; // BLE activado por usuario (si la build lo soporta)
+    char       blePin[7]           = "000000"; // PIN BLE persistente (ASCII 6 dígitos)
+    char       bleName[BLE_NAME_MAX_LEN] = "ALTI-0000"; // Nombre visible en advertising
 };
 
 class SettingsService {
@@ -109,6 +116,31 @@ Serial.println(s.alturaOffset);
         // Pantalla limpia en vuelo/FF (off por defecto)
         s.hudMinimalFlight = prefs.getBool("minhud", false);
 
+#if BLE_FEATURE_ENABLED
+        // BLE on/off
+        s.bleEnabled = prefs.getBool("ble", false);
+
+        // Nombre BLE
+        String name = prefs.getString("blename", "");
+        if (name.length() < 4 || name.length() >= BLE_NAME_MAX_LEN) {
+            name = generateNameFromMac();
+            prefs.putString("blename", name);
+        }
+        name.toCharArray(s.bleName, sizeof(s.bleName));
+
+        // PIN BLE persistente: 6 dígitos ASCII. Si no existe, se genera con la MAC.
+        String pin = prefs.getString("pin", "");
+        if (pin.length() != 6) {
+            pin = generatePinFromMac();
+            prefs.putString("pin", pin);
+        }
+        pin.toCharArray(s.blePin, sizeof(s.blePin));
+#else
+        s.bleEnabled = false;
+        strncpy(s.blePin, "000000", sizeof(s.blePin));
+        strncpy(s.bleName, "ALTI-0000", sizeof(s.bleName));
+#endif
+
         return s;
     }
 
@@ -123,8 +155,38 @@ Serial.println(s.alturaOffset);
         prefs.putUChar("user",   s.usrActual);
         prefs.putUChar("hudmask", s.hud.toMask());
         prefs.putBool("minhud",  s.hudMinimalFlight);
+#if BLE_FEATURE_ENABLED
+        prefs.putBool("ble",     s.bleEnabled);
+        prefs.putString("blename", s.bleName);
+        prefs.putString("pin",   s.blePin);
+#endif
     }
 
 private:
+    // Genera un PIN de 6 dígitos a partir de la MAC por defecto (determinista por dispositivo).
+    static String generatePinFromMac() {
+        uint8_t mac[6] = {0};
+        esp_efuse_mac_get_default(mac); // MAC base única por dispositivo
+        uint32_t v = 0;
+        for (int i = 0; i < 6; ++i) {
+            v = (v << 5) ^ mac[i] ^ (v >> 2);
+        }
+        // LCG simple para mezclar y limitar a 6 dígitos
+        v = (1103515245u * v + 12345u) & 0x7fffffff;
+        uint32_t pin = (v % 900000u) + 100000u; // rango 100000..999999
+        char buf[7];
+        snprintf(buf, sizeof(buf), "%06u", static_cast<unsigned>(pin));
+        return String(buf);
+    }
+
+    // Genera nombre "ALTI-XXXX" desde la MAC
+    static String generateNameFromMac() {
+        uint8_t mac[6] = {0};
+        esp_efuse_mac_get_default(mac);
+        char buf[BLE_NAME_MAX_LEN];
+        snprintf(buf, sizeof(buf), "ALTI-%02X%02X", mac[4], mac[5]);
+        return String(buf);
+    }
+
     Preferences prefs;
 };

@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "include/config_ui.h"
+#include "include/config_ble.h"
 #include "drivers/LcdDriver.h"
 #include "core/SettingsService.h"
 #include "ui/UiStrings.h"
@@ -82,7 +83,7 @@ public:
         const char* selMarker = ">";
         uint8_t xLeft = 7; // desplazamos todo 5 px a la derecha
         uint16_t selW = u8g2.getUTF8Width(selMarker);
-        const uint8_t suffixX = 70; // columna fija para sufijos/toggles
+        const uint8_t suffixX = 90; // columna fija para sufijos/toggles
 
         for (uint8_t i = startIndex; i < endIndex; ++i) {
             const char* baseLabel = uiMenuLabel(lang, i);
@@ -153,7 +154,13 @@ private:
             return settings.inverPant ? " On" : " Off";
         case 4: // Idioma
             return (settings.idioma == Language::ES) ? " ES" : " EN";
-        case 6: // Pantalla limpia
+        case 5: // Bluetooth
+        #if BLE_FEATURE_ENABLED
+            return settings.bleEnabled ? " On" : " Off";
+        #else
+            return " Off";
+        #endif
+        case 7: // Pantalla limpia
             return settings.hudMinimalFlight ? " On" : " Off";
         default:
             return "";

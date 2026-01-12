@@ -116,3 +116,20 @@ el altimetro base tendrá dos versiones una con y una sin bluetooth, corresponde
 - Requiere autenticación previa (pairing/PIN) y verificación de imagen (hash/firma) antes de aplicar para evitar cargas no autorizadas o corruptas.
 - Durante la actualización, deshabilitar sleeps que interrumpan la transferencia; reactivar política de energía al terminar.
 - La app móvil debe manejar reconexiones y reintentos, mostrar progreso y no dejar imágenes a medias.
+
+# decisiones ble/ota (resumen)
+- Formato de datos BLE: JSON simple para comandos/respuestas.
+- Status en app: mostrar batería, cargando y versión de firmware.
+- Ajustes desde app: unidad, idioma, luz, ahorro, invertir pantalla, HUD/pantalla limpia; BLE on/off sólo desde el altímetro.
+- Aplicación de cambios: la app puede acumular y al confirmar el altímetro aplica en vivo y guarda (sin reinicio).
+- Autenticación: con el PIN único del altímetro (AUTH), opcional pairing estándar si se desea más adelante.
+- Bitácora: se puede leer desde la app (stream de registros).
+- OTA por BLE: incluida en esta versión.
+- Nombre de dispositivo: editable desde la app (guardado en NVS, anunciado).
+- Transferencias: mantener despierto durante log/OTA (busy bloquea sleeps).
+- BLE on/off: sólo desde menú del altímetro; no se apaga desde la app.
+
+# app móvil y contrato compartido
+- La app móvil va en un repo separado (React Native). El contrato BLE (UUIDs, comandos, formatos) vive en el submódulo `alti-protocol` y es la única fuente de verdad.
+- El firmware usa un header generado desde `alti-protocol/protocol.json`; la app consume el mismo contrato (dependencia npm/git) para evitar divergencias.
+- Flujo de cambios: actualizar `alti-protocol` + versión, luego actualizar submódulo en firmware y dependencia en la app para mantener compatibilidad.

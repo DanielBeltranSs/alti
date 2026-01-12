@@ -7,7 +7,9 @@
 #include "core/SettingsService.h"
 #include "drivers/RtcDs3231Driver.h"
 #include "include/config_ui.h"
+#include "include/config_ble.h"
 #include "ui/LogbookUi.h"
+#include "core/BleManager.h"
 
 class UiInputController {
 public:
@@ -18,7 +20,8 @@ public:
                       LcdDriver&         lcd,
                       LogbookUi&         logbookUi,
                       RtcDs3231Driver&   rtc,
-                      FlightPhaseService& flightPhase)
+                      FlightPhaseService& flightPhase,
+                      BleManager*        bleMgr = nullptr)
         : uiState(uiState),
           settings(settings),
           settingsService(settingsService),
@@ -26,7 +29,8 @@ public:
           lcd(lcd),
           logbookUi(logbookUi),
           rtcDrv(rtc),
-          flight(&flightPhase)
+          flight(&flightPhase),
+          bleManager(bleMgr)
     {}
 
     void handleEvent(const ButtonEvent& ev, uint32_t nowMs) {
@@ -64,6 +68,9 @@ public:
         case UiScreen::MENU_ICONS:
             handleIconsScreenButton(ev, logicalId);
             break;
+        case UiScreen::MENU_BLE:
+            handleBleScreenButton(ev, logicalId);
+            break;
         default:
             // Otros submenús en el futuro
             handleMenuScreenButton(ev, logicalId, locked);
@@ -80,6 +87,7 @@ private:
     LogbookUi&        logbookUi;
     RtcDs3231Driver&  rtcDrv;
     FlightPhaseService* flight = nullptr;
+    BleManager*       bleManager = nullptr;
 
     // Estado del backlight (para toggle). Arrancamos apagado.
     bool backlightOn = false;
@@ -224,14 +232,15 @@ private:
         // 2: Ahorro
         // 3: Invertir
         // 4: Idioma
-        // 5: Iconos HUD
-        // 6: Pantalla limpia vuelo/FF
-        // 7: Bitácora
-        // 8: Offset
-        // 9: Fecha y hora
-        // 10: Suspender (deep sleep manual)
-        // 11: Juego (demo)
-        // 12: Salir
+        // 5: Bluetooth
+        // 6: Iconos HUD
+        // 7: Pantalla limpia vuelo/FF
+        // 8: Bitácora
+        // 9: Offset
+        // 10: Fecha y hora
+        // 11: Suspender (deep sleep manual)
+        // 12: Juego (demo)
+        // 13: Salir
 
         switch (idx) {
         case 0: { // Unidad m/ft
@@ -307,14 +316,20 @@ private:
             break;
         }
 
-        case 5: { // Iconos HUD
+        case 5: { // Bluetooth
+            uiState.setScreen(UiScreen::MENU_BLE);
+            Serial.println(F("[MENU] Bluetooth"));
+            break;
+        }
+
+        case 6: { // Iconos HUD
             uiState.setIconMenuIndex(0);
             uiState.setScreen(UiScreen::MENU_ICONS);
             Serial.println(F("[MENU] Iconos HUD"));
             break;
         }
 
-        case 6: { // Pantalla limpia en vuelo/FF
+        case 7: { // Pantalla limpia en vuelo/FF
             settings.hudMinimalFlight = !settings.hudMinimalFlight;
             settingsService.save(settings);
             Serial.printf("[MENU] HUD limpio vuelo -> %s\n",
@@ -322,19 +337,19 @@ private:
             break;
         }
 
-        case 7: // Bitácora (TODO submenú)
+        case 8: // Bitácora (TODO submenú)
             logbookUi.enter();
             uiState.setScreen(UiScreen::MENU_LOGBOOK);
             Serial.println(F("[MENU] Bit\u00e1cora -> UI"));
             break;
 
-        case 8: // Offset (editor más adelante)
+        case 9: // Offset (editor más adelante)
             uiState.startOffsetEdit(settings.alturaOffset);
             uiState.setScreen(UiScreen::MENU_OFFSET);
             Serial.println(F("[MENU] Offset editor"));
             break;
 
-        case 9: // Fecha y hora (editor más adelante)
+        case 10: // Fecha y hora (editor más adelante)
             {
                 UtcDateTime now = rtcDrv.nowUtc();
                 uiState.startDateTimeEdit(now);
@@ -343,18 +358,18 @@ private:
             }
             break;
 
-        case 10: // Suspender
+        case 11: // Suspender
             uiState.requestSuspend();
             uiState.setScreen(UiScreen::MAIN); // volvemos a MAIN para permitir sleep
             Serial.println(F("[MENU] Suspender -> solicitar deep sleep"));
             break;
 
-        case 11: // Juego
+        case 12: // Juego
             uiState.setScreen(UiScreen::GAME);
             Serial.println(F("[MENU] Juego -> DEMO"));
             break;
 
-        case 12: // Salir del menú
+        case 13: // Salir del menú
             uiState.setScreen(UiScreen::MAIN);
             Serial.println(F("[MENU] Salir -> MAIN"));
             break;
@@ -472,6 +487,29 @@ private:
                 return;
             }
         }
+    }
+
+    // --- BLE screen ---
+    void handleBleScreenButton(const ButtonEvent& ev, ButtonId logicalId) {
+#if BLE_FEATURE_ENABLED
+        if (ev.type == ButtonEventType::PRESS || ev.type == ButtonEventType::REPEAT) {
+            if (logicalId == ButtonId::UP || logicalId == ButtonId::DOWN) {
+                settings.bleEnabled = !settings.bleEnabled;
+                settingsService.save(settings);
+                if (bleManager) bleManager->setEnabled(settings.bleEnabled);
+                return;
+            }
+            if (logicalId == ButtonId::MID) {
+                uiState.setScreen(UiScreen::MENU_ROOT);
+                return;
+            }
+        }
+#else
+        (void)ev; (void)logicalId;
+        if (logicalId == ButtonId::MID && ev.type == ButtonEventType::PRESS) {
+            uiState.setScreen(UiScreen::MENU_ROOT);
+        }
+#endif
     }
 
     // --- Iconos HUD ---

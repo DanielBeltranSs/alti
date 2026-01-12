@@ -12,6 +12,7 @@
 #include "core/JumpRecorder.h"
 #include "ui/LogbookUi.h"
 #include "game/DoomMiniGame.h"
+#include "core/BleManager.h"
 
 // Instancias globales de servicios y drivers.
 SettingsService    gSettingsService;
@@ -20,6 +21,7 @@ FlightPhaseService gFlightPhaseService;
 SleepPolicyService gSleepPolicyService;
 UiStateService     gUiStateService;
 JumpRecorder       gJumpRecorder;
+BleManager         gBle;
 
 Bmp390Driver       gBmpDriver;
 RtcDs3231Driver    gRtcDriver;
@@ -41,7 +43,8 @@ UiInputController  gUiInputController(gUiStateService,
                                       gLcdDriver,
                                       gLogbookUi,
                                       gRtcDriver,
-                                      gFlightPhaseService);
+                                      gFlightPhaseService,
+                                      &gBle);
 
 // Configura AppContext para apuntar a las instancias globales.
 void setupContext() {
@@ -107,6 +110,13 @@ void setup() {
     gJumpRecorder.begin(&gLogbook, &gRtcDriver);
     gUiRenderer.begin();
     gGame.begin(&gLcdDriver, &gUiStateService);
+    gBle.begin(gSettings);
+    gBle.setContext(&gSettings,
+                    &gSettingsService,
+                    &gLcdDriver,
+                    &gBatteryMonitor,
+                    &gRtcDriver,
+                    &gLogbook);
 
     // Contexto
     setupContext();
@@ -118,6 +128,11 @@ void loop() {
     static FlightPhase s_lastPhase = FlightPhase::GROUND;
 
     uint32_t now = millis();
+
+    if (gPowerHw.consumeLightSleepWake() &&
+        gUiStateService.getScreen() == UiScreen::MAIN) {
+        gUiRenderer.notifyMainInteraction();
+    }
 
     // 1) Botones
     ButtonEvent ev;
@@ -168,7 +183,8 @@ void loop() {
         gUiStateService,
         gFlightPhaseService,
         gSettings,
-        gBatteryMonitor
+        gBatteryMonitor,
+        gBle.isBusy()
     );
 
     // Aplicar modo del sensor BMP390 según decisión
@@ -228,6 +244,19 @@ void loop() {
     } else if (screen == UiScreen::MENU_ICONS) {
         uint8_t idx = gUiStateService.getIconMenuIndex();
         gUiRenderer.renderIconsMenu(idx, gSettings.hud, gSettings.idioma);
+    } else if (screen == UiScreen::MENU_BLE) {
+        bool featureEnabled =
+#if BLE_FEATURE_ENABLED
+            true;
+#else
+            false;
+#endif
+        gUiRenderer.renderBleScreen(featureEnabled,
+                                    gSettings.bleEnabled,
+                                    gSettings.bleName,
+                                    gSettings.blePin,
+                                    gBle.isConnected(),
+                                    gSettings.idioma);
     } else if (screen == UiScreen::GAME) {
         if (!gGame.isRunning()) {
             gGame.start(now);

@@ -29,7 +29,7 @@ constexpr const uint8_t* UI_FONT_ALT_CLEAR   = u8g2_font_logisoso50_tn;
 // Línea base para modo claro (ajusta para probar centrado vertical)
 constexpr uint8_t UI_CLEAR_ALT_Y             = 58;
 
-constexpr uint8_t UI_MENU_ITEM_COUNT = 13;
+constexpr uint8_t UI_MENU_ITEM_COUNT = 14;
 
 // Número de iconos configurables en la pantalla principal.
 // Iconos configurables (flechas, hora, temperatura, unidad, borde, saltos) + opción de volver.

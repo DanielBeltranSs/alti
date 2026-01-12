@@ -15,6 +15,14 @@ public:
         // Nada especial por ahora.
     }
 
+    bool consumeLightSleepWake() {
+        if (s_wokeFromLightSleep) {
+            s_wokeFromLightSleep = false;
+            return true;
+        }
+        return false;
+    }
+
     void apply(const SleepDecision& d) {
         // 1) Frecuencia de CPU
         static uint32_t s_lastCpuFreq = 0;
@@ -40,6 +48,8 @@ public:
     }
 
 private:
+    inline static bool s_wokeFromLightSleep = false;
+
     // Configura un pin RTC como entrada con PULLDOWN para deep sleep.
     static void configureRtcPulldown(uint8_t pin) {
         gpio_num_t g = static_cast<gpio_num_t>(pin);
@@ -117,6 +127,8 @@ private:
 
         Serial.flush();
         esp_light_sleep_start();
+
+        s_wokeFromLightSleep = true;
 
         // DEBUG: quién me despertó
         esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();

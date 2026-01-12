@@ -12,7 +12,7 @@ struct SleepDecision {
     bool enterLightSleep     = false;
     bool enterDeepSleep      = false;
     uint32_t lightSleepMaxMs = 1000;
-    uint32_t cpuFreqMHz      = 40;
+    uint32_t cpuFreqMHz      = 20;
     SensorMode sensorMode    = SensorMode::AHORRO_FORCED;
     bool     showZzzHint         = false;
 };
@@ -28,7 +28,8 @@ public:
                            UiStateService& ui,
                            const FlightPhaseService& flight,
                            const Settings& settings,
-                           BatteryMonitor& battery)
+                           BatteryMonitor& battery,
+                           bool bleBusy = false)
     {
         SleepDecision d;
 
@@ -140,7 +141,7 @@ public:
             (inactivityMs < NO_SLEEP_GRACE_MS) ||
             (wakeGraceUntilMs != 0 && nowMs < wakeGraceUntilMs);
 
-        if (graceActive) {
+        if (graceActive || bleBusy) {
             return d; // sólo devolvemos CPU + sensorMode
         }
 

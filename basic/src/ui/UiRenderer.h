@@ -11,6 +11,7 @@
 #include "ui/OffsetScreenRenderer.h"
 #include "ui/DateTimeScreenRenderer.h"
 #include "ui/IconsScreenRenderer.h"
+#include "ui/BleScreenRenderer.h"
 
 class BatteryMonitor;
 
@@ -25,7 +26,8 @@ public:
           menuRenderer(lcdDriver),
           offsetRenderer(lcdDriver),
           dateTimeRenderer(lcdDriver),
-          iconsRenderer(lcdDriver) {}
+          iconsRenderer(lcdDriver),
+          bleRenderer(lcdDriver) {}
 
     void begin() {
         // Nada especial de momento; LcdDriver::begin() ya inicializa u8g2
@@ -97,6 +99,15 @@ public:
         iconsRenderer.render(selectedIdx, hud, lang);
     }
 
+    void renderBleScreen(bool featureEnabled,
+                         bool bleEnabled,
+                         const char* name,
+                         const char* pin,
+                         bool connected,
+                         Language lang) {
+        bleRenderer.render(featureEnabled, bleEnabled, name, pin, connected, lang);
+    }
+
 private:
     LcdDriver*      lcd  = nullptr;
     BatteryMonitor* batt = nullptr; // reservado para futuro icono batería
@@ -107,6 +118,7 @@ private:
     OffsetScreenRenderer  offsetRenderer;
     DateTimeScreenRenderer dateTimeRenderer;
     IconsScreenRenderer   iconsRenderer;
+    BleScreenRenderer     bleRenderer;
 
     UiScreen  lastScreen     = UiScreen::MAIN;
     uint32_t  repaintCounter = 0;
