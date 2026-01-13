@@ -2,6 +2,7 @@
 #include <LittleFS.h>
 
 #include "include/config_pins.h"
+#include "include/config_power.h"
 #include "util/Types.h"
 
 #include "core/AppContext.h"
@@ -216,16 +217,25 @@ void loop() {
              static_cast<unsigned>(nowUtc.hour),
              static_cast<unsigned>(nowUtc.minute));
 
-        UiScreen screen = gUiStateService.getScreen();
+    UiScreen screen = gUiStateService.getScreen();
+
+    // Contexto de ahorro LCD: MAIN + suelo + modo AHORRO + sin lock.
+    bool inAhorroMain =
+        (screen == UiScreen::MAIN) &&
+        (phase  == FlightPhase::GROUND) &&
+        !model.lockActive &&
+        (dec.sensorMode == SensorMode::AHORRO ||
+         dec.sensorMode == SensorMode::AHORRO_FORCED);
+
+#if POWER_TEST_BLE_OFF_IN_AHORRO
+    if (inAhorroMain) {
+        gBle.setEnabled(false);
+    } else {
+        gBle.setEnabled(gSettings.bleEnabled);
+    }
+#endif
 
     if (screen == UiScreen::MAIN) {
-        // ¿Contexto de ahorro LCD? MAIN + suelo + modo AHORRO + sin lock
-        bool inAhorroMain =
-            (phase  == FlightPhase::GROUND) &&
-            !model.lockActive &&
-            (dec.sensorMode == SensorMode::AHORRO ||
-             dec.sensorMode == SensorMode::AHORRO_FORCED);
-
         gUiRenderer.renderMainIfNeeded(model, gSettings.hud, inAhorroMain, screen, now);
     } else if (screen == UiScreen::MENU_ROOT) {
         // Render del menú raíz

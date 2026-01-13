@@ -3,6 +3,15 @@
 
 
 #define DEBUG_DISABLE_SLEEP 0
+
+// Medicion de consumo: forzar BLE off en ahorro y aplicar power-down seguro en light-sleep.
+#ifndef POWER_TEST_BLE_OFF_IN_AHORRO
+#define POWER_TEST_BLE_OFF_IN_AHORRO 1
+#endif
+
+#ifndef POWER_LIGHT_SLEEP_PD_ENABLE
+#define POWER_LIGHT_SLEEP_PD_ENABLE 1
+#endif
 // Default power management settings and thresholds.  These values are
 // used by SleepPolicyService to decide when to change CPU frequency,
 // enter light sleep, or enter deep sleep.  Adjust these to balance
@@ -19,6 +28,6 @@ constexpr uint32_t POWER_IDLE_DEEP_SLEEP_TIMEOUT_MS  = 600000; // 10 minutes
 
 // CPU frequency options (in MHz).  SleepPolicyService will select from
 // these based on current activity.
-constexpr uint32_t CPU_FREQ_LOW     = 20;
+constexpr uint32_t CPU_FREQ_LOW     = 40;
 constexpr uint32_t CPU_FREQ_MEDIUM  = 80;
 constexpr uint32_t CPU_FREQ_HIGH    = 160;

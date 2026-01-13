@@ -12,7 +12,7 @@ struct SleepDecision {
     bool enterLightSleep     = false;
     bool enterDeepSleep      = false;
     uint32_t lightSleepMaxMs = 1000;
-    uint32_t cpuFreqMHz      = 20;
+    uint32_t cpuFreqMHz      = 40;
     SensorMode sensorMode    = SensorMode::AHORRO_FORCED;
     bool     showZzzHint         = false;
 };

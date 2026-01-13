@@ -3,6 +3,7 @@
 #include "esp_sleep.h"
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
+#include "soc/soc_caps.h"
 
 #include "include/config_power.h"
 #include "include/config_pins.h"
@@ -113,6 +114,10 @@ private:
             return;
         }
 
+#if POWER_LIGHT_SLEEP_PD_ENABLE
+        configureLightSleepPowerDomains();
+#endif
+
         esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
         // Wake por GPIO (dominio digital) como en tu firmware viejo
@@ -135,4 +140,23 @@ private:
         Serial.print("[POWER] Wakeup cause (LS): ");
         Serial.println((int)cause);
     }
+
+#if POWER_LIGHT_SLEEP_PD_ENABLE
+    static void configureLightSleepPowerDomains() {
+        // Configuracion minima segura: mantener RTC periph para wake, apagar dominios RTC no usados.
+    #if SOC_PM_SUPPORT_RTC_PERIPH_PD
+        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+    #endif
+    #if SOC_PM_SUPPORT_RTC_SLOW_MEM_PD
+        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_ON); //no disponible
+    #endif
+    #if SOC_PM_SUPPORT_RTC_FAST_MEM_PD
+        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  //no disponible
+    #endif
+    #if SOC_PM_SUPPORT_RC_FAST_PD
+        //esp_sleep_pd_config(ESP_PD_DOMAIN_RC_FAST, ESP_PD_OPTION_OFF);  //esto hace que se pierda el contraste de la pantalla cada x segundos
+    #endif
+        //esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF); //idem
+    }
+#endif
 };
